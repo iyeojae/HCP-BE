@@ -1,0 +1,30 @@
+package com.example.hcp.domain.application.entity;
+
+import com.example.hcp.domain.form.entity.FormQuestion;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Entity
+@Table(name = "application_answers")
+public class ApplicationAnswer {
+
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Setter
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "application_id", nullable = false)
+    private Application application;
+
+    @Setter
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "question_id", nullable = false)
+    private FormQuestion question;
+
+    @Setter
+    @Column(name = "value_text", columnDefinition = "TEXT")
+    private String valueText;
+
+    public ApplicationAnswer() {}
+
+}
