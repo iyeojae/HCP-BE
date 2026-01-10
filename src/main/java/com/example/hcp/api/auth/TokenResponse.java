@@ -4,5 +4,8 @@ public record TokenResponse(
         String accessToken,
         Long userId,
         String role,
-        String studentNo
+        String loginId,
+        String studentNo,
+        String name,
+        String department
 ) {}

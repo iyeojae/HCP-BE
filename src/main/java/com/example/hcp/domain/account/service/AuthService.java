@@ -25,13 +25,20 @@ public class AuthService {
         this.jwtTokenProvider = jwtTokenProvider;
     }
 
-    public AuthResult signup(String studentNo, String password) {
+    public AuthResult signup(String loginId, String studentNo, String name, String department, String password) {
+        userRepository.findByLoginId(loginId).ifPresent(u -> {
+            throw new ApiException(ErrorCode.CONFLICT, "LOGIN_ID_ALREADY_EXISTS");
+        });
+
         userRepository.findByStudentNo(studentNo).ifPresent(u -> {
             throw new ApiException(ErrorCode.CONFLICT, "STUDENT_NO_ALREADY_EXISTS");
         });
 
         User user = new User();
+        user.setLoginId(loginId);
         user.setStudentNo(studentNo);
+        user.setName(name);
+        user.setDepartment(department);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setRole(Role.USER);
 
@@ -40,12 +47,20 @@ public class AuthService {
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
 
-        TokenResponse body = new TokenResponse(accessToken, user.getId(), user.getRole().name(), user.getStudentNo());
+        TokenResponse body = new TokenResponse(
+                accessToken,
+                user.getId(),
+                user.getRole().name(),
+                user.getLoginId(),
+                user.getStudentNo(),
+                user.getName(),
+                user.getDepartment()
+        );
         return new AuthResult(body, refreshToken);
     }
 
-    public AuthResult login(String studentNo, String password) {
-        User user = userRepository.findByStudentNo(studentNo)
+    public AuthResult login(String loginId, String password) {
+        User user = userRepository.findByLoginId(loginId)
                 .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHORIZED, "INVALID_CREDENTIALS"));
 
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
@@ -55,7 +70,15 @@ public class AuthService {
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
 
-        TokenResponse body = new TokenResponse(accessToken, user.getId(), user.getRole().name(), user.getStudentNo());
+        TokenResponse body = new TokenResponse(
+                accessToken,
+                user.getId(),
+                user.getRole().name(),
+                user.getLoginId(),
+                user.getStudentNo(),
+                user.getName(),
+                user.getDepartment()
+        );
         return new AuthResult(body, refreshToken);
     }
 
@@ -72,7 +95,15 @@ public class AuthService {
         String newAccess = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
         String newRefresh = jwtTokenProvider.createRefreshToken(user.getId());
 
-        TokenResponse body = new TokenResponse(newAccess, user.getId(), user.getRole().name(), user.getStudentNo());
+        TokenResponse body = new TokenResponse(
+                newAccess,
+                user.getId(),
+                user.getRole().name(),
+                user.getLoginId(),
+                user.getStudentNo(),
+                user.getName(),
+                user.getDepartment()
+        );
         return new AuthResult(body, newRefresh);
     }
 }

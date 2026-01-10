@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_users_login_id", columnNames = "login_id"),
         @UniqueConstraint(name = "uk_users_student_no", columnNames = "student_no")
 })
 public class User {
@@ -17,10 +18,27 @@ public class User {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // 로그인 아이디(사용자가 정하는 값)
+    @Setter
+    @Getter
+    @Column(name = "login_id", nullable = false, length = 50)
+    private String loginId;
+
+    // 학번(입력/저장하되 로그인 아이디로 사용하지 않음)
     @Setter
     @Getter
     @Column(name = "student_no", nullable = false, length = 20)
     private String studentNo;
+
+    @Setter
+    @Getter
+    @Column(name = "name", nullable = false, length = 50)
+    private String name;
+
+    @Setter
+    @Getter
+    @Column(name = "department", nullable = false, length = 100)
+    private String department;
 
     @Setter
     @Getter
