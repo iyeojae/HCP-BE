@@ -1,0 +1,227 @@
+package com.example.hcp.api.clubadmin;
+
+import com.example.hcp.api.clubadmin.request.ChangeStatusRequest;
+import com.example.hcp.api.clubadmin.request.ClubUpsertRequest;
+import com.example.hcp.api.clubadmin.request.FormUpsertRequest;
+import com.example.hcp.api.clubadmin.request.PostUpsertRequest;
+import com.example.hcp.api.clubadmin.response.*;
+import com.example.hcp.domain.account.service.ClubAccessService;
+import com.example.hcp.domain.application.entity.Application;
+import com.example.hcp.domain.application.entity.ApplicationAnswer;
+import com.example.hcp.domain.application.service.ApplicationAdminService;
+import com.example.hcp.domain.club.entity.Club;
+import com.example.hcp.domain.club.service.ClubCommandService;
+import com.example.hcp.domain.content.entity.ClubPost;
+import com.example.hcp.domain.content.entity.MediaFile;
+import com.example.hcp.domain.content.service.ContentCommandService;
+import com.example.hcp.domain.form.entity.FormQuestion;
+import com.example.hcp.domain.form.service.FormCommandService;
+import com.example.hcp.domain.stats.service.ClubDashboardService;
+import com.example.hcp.global.exception.ApiException;
+import com.example.hcp.global.exception.ErrorCode;
+import com.example.hcp.global.security.SecurityUser;
+import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/clubadmin")
+@PreAuthorize("hasRole('CLUB_ADMIN') or hasRole('ADMIN')")
+public class ClubAdminController {
+
+    private final ClubAccessService clubAccessService;
+    private final ClubCommandService clubCommandService;
+    private final ContentCommandService contentCommandService;
+    private final FormCommandService formCommandService;
+    private final ApplicationAdminService applicationAdminService;
+    private final ClubDashboardService clubDashboardService;
+
+    public ClubAdminController(
+            ClubAccessService clubAccessService,
+            ClubCommandService clubCommandService,
+            ContentCommandService contentCommandService,
+            FormCommandService formCommandService,
+            ApplicationAdminService applicationAdminService,
+            ClubDashboardService clubDashboardService
+    ) {
+        this.clubAccessService = clubAccessService;
+        this.clubCommandService = clubCommandService;
+        this.contentCommandService = contentCommandService;
+        this.formCommandService = formCommandService;
+        this.applicationAdminService = applicationAdminService;
+        this.clubDashboardService = clubDashboardService;
+    }
+
+    @GetMapping("/clubs")
+    public MyClubsResponse myClubs(@AuthenticationPrincipal SecurityUser me) {
+        return new MyClubsResponse(clubAccessService.myClubIds(me.userId()));
+    }
+
+    @PostMapping("/clubs")
+    public CreateClubResponse createClub(
+            @AuthenticationPrincipal SecurityUser me,
+            @Valid @RequestBody ClubUpsertRequest req
+    ) {
+        Club club = new Club();
+        club.setName(req.name());
+        club.setIntroduction(req.introduction());
+        club.setActivities(req.activities());
+        club.setRecruitTarget(req.recruitTarget());
+        club.setInterviewProcess(req.interviewProcess());
+        club.setContactLink(req.contactLink());
+        club.setCategory(req.category());
+        club.setRecruitmentStatus(req.recruitmentStatus());
+        club.setPublic(req.isPublic());
+
+        Club saved = clubCommandService.create(club);
+        return new CreateClubResponse(saved.getId());
+    }
+
+    @PutMapping("/clubs/{clubId}")
+    public void updateClub(
+            @AuthenticationPrincipal SecurityUser me,
+            @PathVariable Long clubId,
+            @Valid @RequestBody ClubUpsertRequest req
+    ) {
+        if (!me.role().name().equals("ADMIN")) {
+            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
+        }
+
+        Club changes = new Club();
+        changes.setName(req.name());
+        changes.setIntroduction(req.introduction());
+        changes.setActivities(req.activities());
+        changes.setRecruitTarget(req.recruitTarget());
+        changes.setInterviewProcess(req.interviewProcess());
+        changes.setContactLink(req.contactLink());
+        changes.setCategory(req.category());
+        changes.setRecruitmentStatus(req.recruitmentStatus());
+        changes.setPublic(req.isPublic());
+
+        clubCommandService.update(clubId, changes);
+    }
+
+    @PostMapping("/clubs/{clubId}/posts")
+    public CreatePostResponse createPost(
+            @AuthenticationPrincipal SecurityUser me,
+            @PathVariable Long clubId,
+            @Valid @RequestBody PostUpsertRequest req
+    ) {
+        if (!me.role().name().equals("ADMIN")) {
+            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
+        }
+        ClubPost post = contentCommandService.createPost(clubId, req.title(), req.content());
+        return new CreatePostResponse(post.getId());
+    }
+
+    @PostMapping("/clubs/{clubId}/media")
+    public UploadMediaResponse uploadMedia(
+            @AuthenticationPrincipal SecurityUser me,
+            @PathVariable Long clubId,
+            @RequestParam(required = false) Long postId,
+            @RequestPart MultipartFile file
+    ) {
+        if (!me.role().name().equals("ADMIN")) {
+            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
+        }
+        MediaFile media = contentCommandService.uploadMedia(clubId, postId, file);
+        return new UploadMediaResponse(media.getId());
+    }
+
+    @PutMapping("/clubs/{clubId}/form")
+    public UpsertFormResponse upsertForm(
+            @AuthenticationPrincipal SecurityUser me,
+            @PathVariable Long clubId,
+            @Valid @RequestBody FormUpsertRequest req
+    ) {
+        if (!me.role().name().equals("ADMIN")) {
+            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
+        }
+
+        List<FormQuestion> questions = req.questions().stream().map(q -> {
+            FormQuestion fq = new FormQuestion();
+            fq.setOrderNo(q.orderNo());
+            fq.setLabel(q.label());
+            fq.setType(q.type());
+            fq.setRequired(q.required());
+            fq.setOptionsJson(q.optionsJson());
+            return fq;
+        }).toList();
+
+        Long formId = formCommandService.upsertForm(clubId, questions).getId();
+        return new UpsertFormResponse(formId);
+    }
+
+    @GetMapping("/clubs/{clubId}/applications")
+    public ApplicationIdsResponse applications(
+            @AuthenticationPrincipal SecurityUser me,
+            @PathVariable Long clubId
+    ) {
+        if (!me.role().name().equals("ADMIN")) {
+            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
+        }
+        List<Application> apps = applicationAdminService.listByClub(clubId);
+        return new ApplicationIdsResponse(apps.stream().map(Application::getId).toList());
+    }
+
+    @GetMapping("/clubs/{clubId}/applications/{applicationId}")
+    public List<String> applicationDetail(
+            @AuthenticationPrincipal SecurityUser me,
+            @PathVariable Long clubId,
+            @PathVariable Long applicationId
+    ) {
+        if (!me.role().name().equals("ADMIN")) {
+            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
+        }
+
+        Application app = applicationAdminService.get(applicationId);
+        if (!app.getClub().getId().equals(clubId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "CLUB_ACCESS_DENIED");
+        }
+
+        List<ApplicationAnswer> answers = applicationAdminService.answers(applicationId);
+        return answers.stream().map(ApplicationAnswer::getValueText).toList();
+    }
+
+    @PatchMapping("/clubs/{clubId}/applications/{applicationId}/status")
+    public void changeStatus(
+            @AuthenticationPrincipal SecurityUser me,
+            @PathVariable Long clubId,
+            @PathVariable Long applicationId,
+            @Valid @RequestBody ChangeStatusRequest req
+    ) {
+        if (!me.role().name().equals("ADMIN")) {
+            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
+        }
+
+        Application app = applicationAdminService.get(applicationId);
+        if (!app.getClub().getId().equals(clubId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "CLUB_ACCESS_DENIED");
+        }
+
+        applicationAdminService.changeStatus(applicationId, req.status());
+    }
+
+    @GetMapping("/clubs/{clubId}/dashboard")
+    public DashboardResponse dashboard(
+            @AuthenticationPrincipal SecurityUser me,
+            @PathVariable Long clubId
+    ) {
+        if (!me.role().name().equals("ADMIN")) {
+            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
+        }
+
+        ClubDashboardService.DashboardResult r = clubDashboardService.dashboard(clubId);
+        return new DashboardResponse(
+                r.totalApplications(),
+                r.viewCount(),
+                r.dailyApplications().stream()
+                        .map(d -> new DashboardResponse.Daily(d.date(), d.count()))
+                        .toList()
+        );
+    }
+}
