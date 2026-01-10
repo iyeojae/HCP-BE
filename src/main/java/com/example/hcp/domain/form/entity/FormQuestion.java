@@ -1,3 +1,4 @@
+// src/main/java/com/example/hcp/domain/form/entity/FormQuestion.java
 package com.example.hcp.domain.form.entity;
 
 import jakarta.persistence.*;
@@ -21,12 +22,13 @@ public class FormQuestion {
     private int orderNo;
 
     @Setter
-    @Column(name = "label", nullable = false, length = 200)
+    @Column(name = "label", nullable = false, length = 100)
     private String label;
 
+    // DB 컬럼 유지(폼 저장 시 고정값 세팅)
     @Setter
     @Column(name = "type", nullable = false, length = 20)
-    private String type; // TEXT/LONG_TEXT/SELECT/MULTISELECT 등
+    private String type;
 
     @Setter
     @Column(name = "required", nullable = false)
@@ -34,8 +36,7 @@ public class FormQuestion {
 
     @Setter
     @Column(name = "options_json", columnDefinition = "TEXT")
-    private String optionsJson; // 선택지 저장(필요 시)
+    private String optionsJson;
 
     public FormQuestion() {}
-
 }

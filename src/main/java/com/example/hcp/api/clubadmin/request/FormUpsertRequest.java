@@ -1,17 +1,17 @@
 package com.example.hcp.api.clubadmin.request;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
 public record FormUpsertRequest(
-        @NotEmpty List<Question> questions
-) {
-    public record Question(
-            int orderNo,
-            String label,
-            String type,
-            boolean required,
-            String optionsJson
-    ) {}
-}
+        @NotEmpty
+        @Size(max = 50)
+        List<
+                @NotBlank
+                @Size(max = 100)
+                        String
+                > labels
+) {}

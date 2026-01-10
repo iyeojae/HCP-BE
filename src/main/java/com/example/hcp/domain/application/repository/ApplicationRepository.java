@@ -8,6 +8,10 @@ import java.util.List;
 public interface ApplicationRepository extends JpaRepository<Application, Long> {
 
     List<Application> findByUser_IdOrderByIdDesc(Long userId);
-
     List<Application> findByClub_IdOrderByIdDesc(Long clubId);
+
+    boolean existsByUser_IdAndClub_Id(Long userId, Long clubId);
+
+    // FormCommandService에서 폼 수정 잠금에 사용
+    boolean existsByClub_Id(Long clubId);
 }

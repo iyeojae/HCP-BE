@@ -1,3 +1,4 @@
+// src/main/java/com/example/hcp/api/clubadmin/ClubAdminController.java
 package com.example.hcp.api.clubadmin;
 
 import com.example.hcp.api.clubadmin.request.ChangeStatusRequest;
@@ -14,7 +15,6 @@ import com.example.hcp.domain.club.service.ClubCommandService;
 import com.example.hcp.domain.content.entity.ClubPost;
 import com.example.hcp.domain.content.entity.MediaFile;
 import com.example.hcp.domain.content.service.ContentCommandService;
-import com.example.hcp.domain.form.entity.FormQuestion;
 import com.example.hcp.domain.form.service.FormCommandService;
 import com.example.hcp.domain.stats.service.ClubDashboardService;
 import com.example.hcp.global.exception.ApiException;
@@ -142,34 +142,36 @@ public class ClubAdminController {
             clubAccessService.assertClubAdminAccess(me.userId(), clubId);
         }
 
-        List<FormQuestion> questions = req.questions().stream().map(q -> {
-            FormQuestion fq = new FormQuestion();
-            fq.setOrderNo(q.orderNo());
-            fq.setLabel(q.label());
-            fq.setType(q.type());
-            fq.setRequired(q.required());
-            fq.setOptionsJson(q.optionsJson());
-            return fq;
-        }).toList();
-
-        Long formId = formCommandService.upsertForm(clubId, questions).getId();
+        Long formId = formCommandService.upsertForm(clubId, req.labels()).getId();
         return new UpsertFormResponse(formId);
     }
 
     @GetMapping("/clubs/{clubId}/applications")
-    public ApplicationIdsResponse applications(
+    public ApplicationListResponse applications(
             @AuthenticationPrincipal SecurityUser me,
             @PathVariable Long clubId
     ) {
         if (!me.role().name().equals("ADMIN")) {
             clubAccessService.assertClubAdminAccess(me.userId(), clubId);
         }
+
         List<Application> apps = applicationAdminService.listByClub(clubId);
-        return new ApplicationIdsResponse(apps.stream().map(Application::getId).toList());
+
+        List<ApplicationListResponse.Item> items = apps.stream().map(a -> new ApplicationListResponse.Item(
+                a.getId(),
+                a.getUser().getId(),
+                a.getUser().getStudentNo(),
+                a.getUser().getName(),
+                a.getUser().getDepartment(),
+                a.getStatus().name(),
+                a.getCreatedAt().toString()
+        )).toList();
+
+        return new ApplicationListResponse(items);
     }
 
     @GetMapping("/clubs/{clubId}/applications/{applicationId}")
-    public List<String> applicationDetail(
+    public ApplicationDetailResponse applicationDetail(
             @AuthenticationPrincipal SecurityUser me,
             @PathVariable Long clubId,
             @PathVariable Long applicationId
@@ -184,7 +186,25 @@ public class ClubAdminController {
         }
 
         List<ApplicationAnswer> answers = applicationAdminService.answers(applicationId);
-        return answers.stream().map(ApplicationAnswer::getValueText).toList();
+
+        // ✅ 변경: Answer(label, value)만 내려주도록 매핑 수정
+        List<ApplicationDetailResponse.Answer> answerDtos = answers.stream().map(a ->
+                new ApplicationDetailResponse.Answer(
+                        a.getQuestion().getLabel(),
+                        a.getValueText()
+                )
+        ).toList();
+
+        return new ApplicationDetailResponse(
+                app.getId(),
+                app.getUser().getId(),
+                app.getUser().getStudentNo(),
+                app.getUser().getName(),
+                app.getUser().getDepartment(),
+                app.getStatus().name(),
+                app.getCreatedAt().toString(),
+                answerDtos
+        );
     }
 
     @PatchMapping("/clubs/{clubId}/applications/{applicationId}/status")

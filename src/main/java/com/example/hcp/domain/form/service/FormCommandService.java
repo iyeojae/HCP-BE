@@ -1,5 +1,7 @@
+// src/main/java/com/example/hcp/domain/form/service/FormCommandService.java
 package com.example.hcp.domain.form.service;
 
+import com.example.hcp.domain.application.repository.ApplicationRepository;
 import com.example.hcp.domain.club.entity.Club;
 import com.example.hcp.domain.club.repository.ClubRepository;
 import com.example.hcp.domain.form.entity.ApplicationForm;
@@ -19,21 +21,28 @@ public class FormCommandService {
     private final ClubRepository clubRepository;
     private final ApplicationFormRepository formRepository;
     private final FormQuestionRepository questionRepository;
+    private final ApplicationRepository applicationRepository;
 
     public FormCommandService(
             ClubRepository clubRepository,
             ApplicationFormRepository formRepository,
-            FormQuestionRepository questionRepository
+            FormQuestionRepository questionRepository,
+            ApplicationRepository applicationRepository
     ) {
         this.clubRepository = clubRepository;
         this.formRepository = formRepository;
         this.questionRepository = questionRepository;
+        this.applicationRepository = applicationRepository;
     }
 
     @Transactional
-    public ApplicationForm upsertForm(Long clubId, List<FormQuestion> questions) {
+    public ApplicationForm upsertForm(Long clubId, List<String> labels) {
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "CLUB_NOT_FOUND"));
+
+        if (applicationRepository.existsByClub_Id(clubId)) {
+            throw new ApiException(ErrorCode.CONFLICT, "FORM_LOCKED_AFTER_APPLICATION");
+        }
 
         ApplicationForm form = formRepository.findByClub_Id(clubId).orElseGet(() -> {
             ApplicationForm f = new ApplicationForm();
@@ -43,8 +52,18 @@ public class FormCommandService {
 
         questionRepository.deleteByForm_Id(form.getId());
 
-        for (FormQuestion q : questions) {
+        int orderNo = 1;
+        for (String label : labels) {
+            FormQuestion q = new FormQuestion();
             q.setForm(form);
+            q.setOrderNo(orderNo++);
+            q.setLabel(label);
+
+            // DB 제약 대응용 고정값
+            q.setType("TEXT");
+            q.setRequired(true);
+            q.setOptionsJson(null);
+
             questionRepository.save(q);
         }
 

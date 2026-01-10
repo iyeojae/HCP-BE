@@ -1,3 +1,4 @@
+// src/main/java/com/example/hcp/domain/application/service/ApplicationStudentService.java
 package com.example.hcp.domain.application.service;
 
 import com.example.hcp.domain.account.entity.User;
@@ -19,8 +20,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class ApplicationStudentService {
@@ -58,9 +57,21 @@ public class ApplicationStudentService {
     }
 
     @Transactional
-    public Long submit(Long userId, Long clubId, List<AnswerInput> answers) {
+    public Long submit(Long userId, Long clubId, List<String> answers) {
+        if (answers == null || answers.isEmpty()) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWERS");
+        }
+        if (answers.size() > 50) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "TOO_MANY_ANSWERS");
+        }
+
+        if (applicationRepository.existsByUser_IdAndClub_Id(userId, clubId)) {
+            throw new ApiException(ErrorCode.CONFLICT, "ALREADY_APPLIED");
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHORIZED));
+
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "CLUB_NOT_FOUND"));
 
@@ -70,7 +81,10 @@ public class ApplicationStudentService {
 
         ApplicationForm form = formQueryService.getFormByClubId(clubId);
         List<FormQuestion> questions = questionRepository.findByForm_IdOrderByOrderNoAsc(form.getId());
-        Map<Long, FormQuestion> qMap = questions.stream().collect(Collectors.toMap(FormQuestion::getId, q -> q));
+
+        if (questions.size() != answers.size()) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "ANSWER_COUNT_MISMATCH");
+        }
 
         Application application = new Application();
         application.setUser(user);
@@ -80,16 +94,13 @@ public class ApplicationStudentService {
 
         application = applicationRepository.save(application);
 
-        for (AnswerInput in : answers) {
-            FormQuestion q = qMap.get(in.questionId());
-            if (q == null) {
-                throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_QUESTION_ID");
-            }
+        for (int i = 0; i < questions.size(); i++) {
+            FormQuestion q = questions.get(i);
 
             ApplicationAnswer a = new ApplicationAnswer();
             a.setApplication(application);
             a.setQuestion(q);
-            a.setValueText(in.value());
+            a.setValueText(answers.get(i));
             answerRepository.save(a);
         }
 
@@ -99,6 +110,4 @@ public class ApplicationStudentService {
     public List<Application> myApplications(Long userId) {
         return applicationRepository.findByUser_IdOrderByIdDesc(userId);
     }
-
-    public record AnswerInput(Long questionId, String value) {}
 }

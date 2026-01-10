@@ -1,11 +1,12 @@
+// src/main/java/com/example/hcp/api/student/ApplicationStudentController.java
 package com.example.hcp.api.student;
 
 import com.example.hcp.domain.application.entity.Application;
 import com.example.hcp.domain.application.service.ApplicationStudentService;
-import com.example.hcp.domain.form.entity.ApplicationForm;
-import com.example.hcp.domain.form.entity.FormQuestion;
 import com.example.hcp.domain.club.entity.Club;
 import com.example.hcp.domain.club.repository.ClubRepository;
+import com.example.hcp.domain.form.entity.ApplicationForm;
+import com.example.hcp.domain.form.entity.FormQuestion;
 import com.example.hcp.global.exception.ApiException;
 import com.example.hcp.global.exception.ErrorCode;
 import com.example.hcp.global.security.SecurityUser;
@@ -35,18 +36,11 @@ public class ApplicationStudentController {
         ApplicationForm form = applicationStudentService.form(clubId);
         List<FormQuestion> qs = applicationStudentService.formQuestions(clubId);
 
-        return new FormResponse(
-                form.getId(),
-                clubId,
-                qs.stream().map(q -> new FormResponse.Question(
-                        q.getId(),
-                        q.getOrderNo(),
-                        q.getLabel(),
-                        q.getType(),
-                        q.isRequired(),
-                        q.getOptionsJson()
-                )).toList()
-        );
+        List<String> labels = qs.stream()
+                .map(FormQuestion::getLabel)
+                .toList();
+
+        return new FormResponse(form.getId(), clubId, labels);
     }
 
     @PostMapping("/clubs/{clubId}/applications")
@@ -55,13 +49,7 @@ public class ApplicationStudentController {
             @PathVariable Long clubId,
             @Valid @RequestBody SubmitApplicationRequest req
     ) {
-        Long appId = applicationStudentService.submit(
-                me.userId(),
-                clubId,
-                req.answers().stream()
-                        .map(a -> new ApplicationStudentService.AnswerInput(a.questionId(), a.value()))
-                        .toList()
-        );
+        Long appId = applicationStudentService.submit(me.userId(), clubId, req.answers());
         return new SubmitApplicationResponse(appId);
     }
 
