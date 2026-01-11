@@ -113,7 +113,7 @@ public class ClubAdminController {
     }
 
     @GetMapping("/clubs/{clubId}/applications")
-    public ApplicationListResponse applications(
+    public List<ApplicationListResponse> applications(
             @AuthenticationPrincipal SecurityUser me,
             @PathVariable Long clubId
     ) {
@@ -123,7 +123,7 @@ public class ClubAdminController {
 
         List<Application> apps = applicationAdminService.listByClub(clubId);
 
-        List<ApplicationListResponse.Item> items = apps.stream().map(a -> new ApplicationListResponse.Item(
+        return apps.stream().map(a -> new ApplicationListResponse(
                 a.getId(),
                 a.getUser().getId(),
                 a.getUser().getStudentNo(),
@@ -132,8 +132,6 @@ public class ClubAdminController {
                 a.getStatus().name(),
                 a.getCreatedAt().toString()
         )).toList();
-
-        return new ApplicationListResponse(items);
     }
 
     @GetMapping("/clubs/{clubId}/applications/{applicationId}")
