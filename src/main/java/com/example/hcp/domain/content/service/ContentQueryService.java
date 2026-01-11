@@ -26,4 +26,8 @@ public class ContentQueryService {
     public List<MediaFile> mediaByPost(Long clubId, Long postId) {
         return mediaFileRepository.findByClub_IdAndPost_IdOrderByIdAsc(clubId, postId);
     }
+
+    public List<MediaFile> mediaByClub(Long clubId) {
+        return mediaFileRepository.findByClub_IdAndPostIsNullOrderByIdAsc(clubId);
+    }
 }

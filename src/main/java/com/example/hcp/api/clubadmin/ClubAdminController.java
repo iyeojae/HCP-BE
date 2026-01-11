@@ -4,7 +4,6 @@ package com.example.hcp.api.clubadmin;
 import com.example.hcp.api.clubadmin.request.ChangeStatusRequest;
 import com.example.hcp.api.clubadmin.request.ClubUpsertRequest;
 import com.example.hcp.api.clubadmin.request.FormUpsertRequest;
-import com.example.hcp.api.clubadmin.request.PostUpsertRequest;
 import com.example.hcp.api.clubadmin.response.*;
 import com.example.hcp.domain.account.service.ClubAccessService;
 import com.example.hcp.domain.application.entity.Application;
@@ -12,7 +11,6 @@ import com.example.hcp.domain.application.entity.ApplicationAnswer;
 import com.example.hcp.domain.application.service.ApplicationAdminService;
 import com.example.hcp.domain.club.entity.Club;
 import com.example.hcp.domain.club.service.ClubCommandService;
-import com.example.hcp.domain.content.entity.ClubPost;
 import com.example.hcp.domain.content.entity.MediaFile;
 import com.example.hcp.domain.content.service.ContentCommandService;
 import com.example.hcp.domain.form.service.FormCommandService;
@@ -61,26 +59,7 @@ public class ClubAdminController {
         return new MyClubsResponse(clubAccessService.myClubIds(me.userId()));
     }
 
-    @PostMapping("/clubs")
-    public CreateClubResponse createClub(
-            @AuthenticationPrincipal SecurityUser me,
-            @Valid @RequestBody ClubUpsertRequest req
-    ) {
-        Club club = new Club();
-        club.setName(req.name());
-        club.setIntroduction(req.introduction());
-        club.setActivities(req.activities());
-        club.setRecruitTarget(req.recruitTarget());
-        club.setInterviewProcess(req.interviewProcess());
-        club.setContactLink(req.contactLink());
-        club.setCategory(req.category());
-        club.setRecruitmentStatus(req.recruitmentStatus());
-        club.setPublic(req.isPublic());
-
-        Club saved = clubCommandService.create(club);
-        return new CreateClubResponse(saved.getId());
-    }
-
+    // ✅ 수정은 CLUB_ADMIN(자기 동아리만) + ADMIN
     @PutMapping("/clubs/{clubId}")
     public void updateClub(
             @AuthenticationPrincipal SecurityUser me,
@@ -105,24 +84,11 @@ public class ClubAdminController {
         clubCommandService.update(clubId, changes);
     }
 
-    @PostMapping("/clubs/{clubId}/posts")
-    public CreatePostResponse createPost(
-            @AuthenticationPrincipal SecurityUser me,
-            @PathVariable Long clubId,
-            @Valid @RequestBody PostUpsertRequest req
-    ) {
-        if (!me.role().name().equals("ADMIN")) {
-            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
-        }
-        ClubPost post = contentCommandService.createPost(clubId, req.title(), req.content());
-        return new CreatePostResponse(post.getId());
-    }
-
     @PostMapping("/clubs/{clubId}/media")
     public UploadMediaResponse uploadMedia(
             @AuthenticationPrincipal SecurityUser me,
             @PathVariable Long clubId,
-            @RequestParam(required = false) Long postId,
+            @RequestParam(required = false) Long postId, // posts 없애면 프론트에서는 그냥 안 보내면 됨(null)
             @RequestPart MultipartFile file
     ) {
         if (!me.role().name().equals("ADMIN")) {
@@ -187,7 +153,6 @@ public class ClubAdminController {
 
         List<ApplicationAnswer> answers = applicationAdminService.answers(applicationId);
 
-        // ✅ 변경: Answer(label, value)만 내려주도록 매핑 수정
         List<ApplicationDetailResponse.Answer> answerDtos = answers.stream().map(a ->
                 new ApplicationDetailResponse.Answer(
                         a.getQuestion().getLabel(),

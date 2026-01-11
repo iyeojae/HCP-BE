@@ -13,15 +13,8 @@ public record ClubDetailResponse(
         String category,
         String recruitmentStatus,
         long viewCount,
-        List<Post> posts
+        List<Media> media
 ) {
-    public record Post(
-            Long postId,
-            String title,
-            String content,
-            List<Media> media
-    ) {}
-
     public record Media(
             Long mediaId,
             String type,

@@ -1,3 +1,4 @@
+// src/main/java/com/example/hcp/domain/content/service/ContentCommandService.java
 package com.example.hcp.domain.content.service;
 
 import com.example.hcp.domain.club.entity.Club;
@@ -44,6 +45,20 @@ public class ContentCommandService {
         post.setContent(content);
 
         return postRepository.save(post);
+    }
+
+    // ✅ 추가: 홍보글 수정
+    @Transactional
+    public void updatePost(Long clubId, Long postId, String title, String content) {
+        ClubPost post = postRepository.findById(postId)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "POST_NOT_FOUND"));
+
+        if (!post.getClub().getId().equals(clubId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "CLUB_ACCESS_DENIED");
+        }
+
+        post.setTitle(title);
+        post.setContent(content);
     }
 
     @Transactional

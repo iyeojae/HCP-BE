@@ -2,12 +2,10 @@ package com.example.hcp.api.common;
 
 import com.example.hcp.domain.club.entity.Club;
 import com.example.hcp.domain.club.service.ClubQueryService;
-import com.example.hcp.domain.content.entity.ClubPost;
 import com.example.hcp.domain.content.entity.MediaFile;
 import com.example.hcp.domain.content.service.ContentQueryService;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -38,17 +36,10 @@ public class ClubPublicController {
     public ClubDetailResponse detail(@PathVariable Long clubId) {
         Club club = clubQueryService.getPublicDetailAndIncreaseView(clubId);
 
-        List<ClubPost> posts = contentQueryService.posts(clubId);
-        List<ClubDetailResponse.Post> postDtos = new ArrayList<>();
-
-        for (ClubPost p : posts) {
-            List<MediaFile> media = contentQueryService.mediaByPost(clubId, p.getId());
-            List<ClubDetailResponse.Media> mediaDtos = media.stream()
-                    .map(m -> new ClubDetailResponse.Media(m.getId(), m.getType(), m.getUrl()))
-                    .toList();
-
-            postDtos.add(new ClubDetailResponse.Post(p.getId(), p.getTitle(), p.getContent(), mediaDtos));
-        }
+        List<MediaFile> media = contentQueryService.mediaByClub(clubId);
+        List<ClubDetailResponse.Media> mediaDtos = media.stream()
+                .map(m -> new ClubDetailResponse.Media(m.getId(), m.getType(), m.getUrl()))
+                .toList();
 
         return new ClubDetailResponse(
                 club.getId(),
@@ -61,7 +52,7 @@ public class ClubPublicController {
                 club.getCategory(),
                 club.getRecruitmentStatus(),
                 club.getViewCount(),
-                postDtos
+                mediaDtos
         );
     }
 }
