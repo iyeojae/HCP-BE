@@ -1,3 +1,4 @@
+// src/main/java/com/example/hcp/domain/application/service/ApplicationAdminService.java
 package com.example.hcp.domain.application.service;
 
 import com.example.hcp.domain.application.entity.Application;
@@ -24,16 +25,19 @@ public class ApplicationAdminService {
     }
 
     public List<Application> listByClub(Long clubId) {
-        return applicationRepository.findByClub_IdOrderByIdDesc(clubId);
+        // ✅ 변경: user 미리 로딩된 조회 사용
+        return applicationRepository.findWithUserByClub_IdOrderByIdDesc(clubId);
     }
 
     public Application get(Long applicationId) {
-        return applicationRepository.findById(applicationId)
+        // ✅ 변경: user+club 미리 로딩된 조회 사용
+        return applicationRepository.findWithUserAndClubById(applicationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "APPLICATION_NOT_FOUND"));
     }
 
     public List<ApplicationAnswer> answers(Long applicationId) {
-        return answerRepository.findByApplication_IdOrderByIdAsc(applicationId);
+        // ✅ 변경: question 미리 로딩된 조회 사용
+        return answerRepository.findWithQuestionByApplication_IdOrderByIdAsc(applicationId);
     }
 
     @Transactional
