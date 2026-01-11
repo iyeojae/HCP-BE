@@ -1,6 +1,7 @@
 package com.example.hcp.domain.club.service;
 
 import com.example.hcp.domain.club.entity.Club;
+import com.example.hcp.domain.club.entity.ClubCategory;
 import com.example.hcp.domain.club.repository.ClubRepository;
 import com.example.hcp.global.exception.ApiException;
 import com.example.hcp.global.exception.ErrorCode;
@@ -18,7 +19,7 @@ public class ClubQueryService {
         this.clubRepository = clubRepository;
     }
 
-    public List<Club> searchPublic(String q, String status, String category) {
+    public List<Club> searchPublic(String q, String status, ClubCategory category) {
         return clubRepository.searchPublic(q, status, category);
     }
 

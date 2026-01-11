@@ -1,6 +1,8 @@
+// src/main/java/com/example/hcp/api/common/ClubPublicController.java
 package com.example.hcp.api.common;
 
 import com.example.hcp.domain.club.entity.Club;
+import com.example.hcp.domain.club.entity.ClubCategory;
 import com.example.hcp.domain.club.service.ClubQueryService;
 import com.example.hcp.domain.content.entity.MediaFile;
 import com.example.hcp.domain.content.service.ContentQueryService;
@@ -24,11 +26,16 @@ public class ClubPublicController {
     public List<ClubListResponse> list(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) String category
+            @RequestParam(required = false) ClubCategory category
     ) {
         List<Club> clubs = clubQueryService.searchPublic(q, status, category);
         return clubs.stream()
-                .map(c -> new ClubListResponse(c.getId(), c.getName(), c.getCategory(), c.getRecruitmentStatus()))
+                .map(c -> new ClubListResponse(
+                        c.getId(),
+                        c.getName(),
+                        c.getCategory(),
+                        c.getRecruitmentStatus()
+                ))
                 .toList();
     }
 

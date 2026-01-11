@@ -1,5 +1,7 @@
+// src/main/java/com/example/hcp/api/clubadmin/request/ClubUpsertRequest.java
 package com.example.hcp.api.clubadmin.request;
 
+import com.example.hcp.domain.club.entity.ClubCategory;
 import jakarta.validation.constraints.NotBlank;
 
 public record ClubUpsertRequest(
@@ -9,7 +11,7 @@ public record ClubUpsertRequest(
         String recruitTarget,
         String interviewProcess,
         String contactLink,
-        String category,
+        ClubCategory category,
         String recruitmentStatus,
         boolean isPublic
 ) {}

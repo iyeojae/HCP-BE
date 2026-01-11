@@ -1,3 +1,4 @@
+// src/main/java/com/example/hcp/domain/club/entity/Club.java
 package com.example.hcp.domain.club.entity;
 
 import jakarta.persistence.*;
@@ -46,8 +47,9 @@ public class Club {
 
     @Setter
     @Getter
+    @Enumerated(EnumType.STRING)
     @Column(name = "category", length = 50)
-    private String category;
+    private ClubCategory category;
 
     @Setter
     @Getter

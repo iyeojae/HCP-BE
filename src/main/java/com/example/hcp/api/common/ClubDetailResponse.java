@@ -1,4 +1,7 @@
+// src/main/java/com/example/hcp/api/common/ClubDetailResponse.java
 package com.example.hcp.api.common;
+
+import com.example.hcp.domain.club.entity.ClubCategory;
 
 import java.util.List;
 
@@ -10,7 +13,7 @@ public record ClubDetailResponse(
         String recruitTarget,
         String interviewProcess,
         String contactLink,
-        String category,
+        ClubCategory category,
         String recruitmentStatus,
         long viewCount,
         List<Media> media

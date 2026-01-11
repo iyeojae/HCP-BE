@@ -1,6 +1,7 @@
 // src/main/java/com/example/hcp/api/admin/AdminCreateClubRequest.java
 package com.example.hcp.api.admin;
 
+import com.example.hcp.domain.club.entity.ClubCategory;
 import jakarta.validation.constraints.NotBlank;
 
 public record AdminCreateClubRequest(
@@ -10,7 +11,7 @@ public record AdminCreateClubRequest(
         String recruitTarget,
         String interviewProcess,
         String contactLink,
-        String category,
+        ClubCategory category,
         String recruitmentStatus,
         boolean isPublic
 ) {}
