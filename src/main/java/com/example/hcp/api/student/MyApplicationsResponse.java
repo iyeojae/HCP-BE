@@ -1,10 +1,8 @@
+// src/main/java/com/example/hcp/api/student/MyApplicationsResponse.java
 package com.example.hcp.api.student;
 
-import java.util.List;
+public class MyApplicationsResponse {
 
-public record MyApplicationsResponse(
-        List<Item> items
-) {
     public record Item(
             Long applicationId,
             Long clubId,

@@ -53,11 +53,12 @@ public class ApplicationStudentController {
         return new SubmitApplicationResponse(appId);
     }
 
+    // ✅ 변경: 래퍼(MyApplicationsResponse)로 감싸지 않고 List를 그대로 반환
     @GetMapping("/applications")
-    public MyApplicationsResponse my(@AuthenticationPrincipal SecurityUser me) {
+    public List<MyApplicationsResponse.Item> my(@AuthenticationPrincipal SecurityUser me) {
         List<Application> apps = applicationStudentService.myApplications(me.userId());
 
-        List<MyApplicationsResponse.Item> items = apps.stream().map(a -> {
+        return apps.stream().map(a -> {
             Club c = clubRepository.findById(a.getClub().getId())
                     .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "CLUB_NOT_FOUND"));
             return new MyApplicationsResponse.Item(
@@ -68,7 +69,5 @@ public class ApplicationStudentController {
                     a.getCreatedAt().toString()
             );
         }).toList();
-
-        return new MyApplicationsResponse(items);
     }
 }
