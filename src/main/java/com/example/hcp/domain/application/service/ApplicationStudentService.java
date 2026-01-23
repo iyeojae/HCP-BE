@@ -12,7 +12,6 @@ import com.example.hcp.domain.club.entity.Club;
 import com.example.hcp.domain.club.repository.ClubRepository;
 import com.example.hcp.domain.form.entity.ApplicationForm;
 import com.example.hcp.domain.form.entity.FormQuestion;
-import com.example.hcp.domain.form.repository.FormQuestionRepository;
 import com.example.hcp.domain.form.service.FormQueryService;
 import com.example.hcp.global.exception.ApiException;
 import com.example.hcp.global.exception.ErrorCode;
@@ -27,7 +26,6 @@ public class ApplicationStudentService {
     private final UserRepository userRepository;
     private final ClubRepository clubRepository;
     private final FormQueryService formQueryService;
-    private final FormQuestionRepository questionRepository;
     private final ApplicationRepository applicationRepository;
     private final ApplicationAnswerRepository answerRepository;
 
@@ -35,14 +33,12 @@ public class ApplicationStudentService {
             UserRepository userRepository,
             ClubRepository clubRepository,
             FormQueryService formQueryService,
-            FormQuestionRepository questionRepository,
             ApplicationRepository applicationRepository,
             ApplicationAnswerRepository answerRepository
     ) {
         this.userRepository = userRepository;
         this.clubRepository = clubRepository;
         this.formQueryService = formQueryService;
-        this.questionRepository = questionRepository;
         this.applicationRepository = applicationRepository;
         this.answerRepository = answerRepository;
     }
@@ -53,7 +49,7 @@ public class ApplicationStudentService {
 
     public List<FormQuestion> formQuestions(Long clubId) {
         ApplicationForm form = form(clubId);
-        return questionRepository.findByForm_IdOrderByOrderNoAsc(form.getId());
+        return formQueryService.questions(form.getId());
     }
 
     @Transactional
@@ -63,6 +59,11 @@ public class ApplicationStudentService {
         }
         if (answers.size() > 50) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "TOO_MANY_ANSWERS");
+        }
+        for (String a : answers) {
+            if (a == null || a.isBlank()) {
+                throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWER");
+            }
         }
 
         if (applicationRepository.existsByUser_IdAndClub_Id(userId, clubId)) {
@@ -80,7 +81,7 @@ public class ApplicationStudentService {
         }
 
         ApplicationForm form = formQueryService.getFormByClubId(clubId);
-        List<FormQuestion> questions = questionRepository.findByForm_IdOrderByOrderNoAsc(form.getId());
+        List<FormQuestion> questions = formQueryService.questions(form.getId());
 
         if (questions.size() != answers.size()) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "ANSWER_COUNT_MISMATCH");
@@ -91,17 +92,14 @@ public class ApplicationStudentService {
         application.setClub(club);
         application.setForm(form);
         application.setStatus(ApplicationStatus.RECEIVED);
-
         application = applicationRepository.save(application);
 
         for (int i = 0; i < questions.size(); i++) {
-            FormQuestion q = questions.get(i);
-
-            ApplicationAnswer a = new ApplicationAnswer();
-            a.setApplication(application);
-            a.setQuestion(q);
-            a.setValueText(answers.get(i));
-            answerRepository.save(a);
+            ApplicationAnswer ans = new ApplicationAnswer();
+            ans.setApplication(application);
+            ans.setQuestion(questions.get(i));
+            ans.setValueText(answers.get(i));
+            answerRepository.save(ans);
         }
 
         return application.getId();

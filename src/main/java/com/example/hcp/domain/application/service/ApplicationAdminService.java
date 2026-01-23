@@ -25,18 +25,15 @@ public class ApplicationAdminService {
     }
 
     public List<Application> listByClub(Long clubId) {
-        // ✅ 변경: user 미리 로딩된 조회 사용
         return applicationRepository.findWithUserByClub_IdOrderByIdDesc(clubId);
     }
 
     public Application get(Long applicationId) {
-        // ✅ 변경: user+club 미리 로딩된 조회 사용
         return applicationRepository.findWithUserAndClubById(applicationId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "APPLICATION_NOT_FOUND"));
     }
 
     public List<ApplicationAnswer> answers(Long applicationId) {
-        // ✅ 변경: question 미리 로딩된 조회 사용
         return answerRepository.findWithQuestionByApplication_IdOrderByIdAsc(applicationId);
     }
 

@@ -54,16 +54,7 @@ public class FormCommandService {
 
         int orderNo = 1;
         for (String label : labels) {
-            FormQuestion q = new FormQuestion();
-            q.setForm(form);
-            q.setOrderNo(orderNo++);
-            q.setLabel(label);
-
-            // DB 제약 대응용 고정값
-            q.setType("TEXT");
-            q.setRequired(true);
-            q.setOptionsJson(null);
-
+            FormQuestion q = new FormQuestion(form, orderNo++, label);
             questionRepository.save(q);
         }
 
