@@ -46,16 +46,17 @@
 {
   "labels": ["이름", "학과", "지원동기"]
 }
+```
 🔁 서버 응답
-json
-코드 복사
+```json
 {
   "formId": 1
 }
+```
 🗃️ 데이터 저장 구조
 📌 1. application_forms 테이블
 id	club_id	updated_at
-1	1	2026-01-23 23:38:48.263955
+1	        1	2026-01-23 23:38:48.263955
 
 새로운 지원폼이 생성되면 club_id 기준으로 1:1 매핑된 레코드가 생성됩니다.
 
@@ -63,9 +64,9 @@ id	club_id	updated_at
 
 📌 2. form_questions 테이블
 id	form_id	order_no	label
-1	1	1	이름
-2	1	2	학과
-3	1	3	지원동기
+1	        1	      1	  이름
+2	        1	      2	  학과
+3	        1	      3	  지원동기
 
 formId를 기준으로 각 질문(label)이 순서대로 저장됩니다.
 
