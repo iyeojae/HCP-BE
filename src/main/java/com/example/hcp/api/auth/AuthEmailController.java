@@ -4,7 +4,6 @@ import com.example.hcp.domain.verification.EmailPurpose;
 import com.example.hcp.domain.verification.EmailVerificationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,7 +19,7 @@ public class AuthEmailController {
 
     public record SendEmailCodeRequest(
             @Email @NotNull String email,
-            @NotBlank EmailPurpose purpose
+            @NotNull EmailPurpose purpose
     ) {}
 
     @PostMapping("/send-code")
