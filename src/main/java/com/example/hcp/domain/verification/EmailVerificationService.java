@@ -16,6 +16,8 @@ public class EmailVerificationService {
     private final EmailVerificationRepository repo;
     private final JavaMailSender mailSender;
     private final SecureRandom random = new SecureRandom();
+    @Value("${spring.mail.username}")
+    private String mailFrom;
 
     @Value("${app.school-email-domain:@office.hanseo.ac.kr}")
     private String allowedDomain;
@@ -44,6 +46,7 @@ public class EmailVerificationService {
         repo.save(ev);
 
         SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setFrom(mailFrom);
         msg.setTo(normalized);
         msg.setSubject("[HCP] 이메일 인증번호");
         msg.setText("인증번호는 " + code + " 입니다.\n유효시간은 " + (ttlSeconds / 60) + "분 입니다.");
