@@ -7,5 +7,6 @@ public record TokenResponse(
         String loginId,
         String studentNo,
         String name,
-        String department
+        String department,
+        String email
 ) {}

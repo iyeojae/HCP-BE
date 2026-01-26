@@ -37,7 +37,8 @@ public class AuthController {
     @PostMapping("/signup")
     public TokenResponse signup(@Valid @RequestBody SignupRequest req, HttpServletResponse res) {
         AuthService.AuthResult r = authService.signup(
-                req.loginId(), req.studentNo(), req.name(), req.department(), req.password()
+                req.loginId(), req.studentNo(), req.name(), req.department(), req.password(),
+                req.email(), req.code()
         );
         setRefreshCookie(res, r.refreshToken());
         return r.response();

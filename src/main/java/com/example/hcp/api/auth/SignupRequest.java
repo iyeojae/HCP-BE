@@ -1,5 +1,6 @@
 package com.example.hcp.api.auth;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
 public record SignupRequest(
@@ -7,5 +8,7 @@ public record SignupRequest(
         @NotBlank String studentNo,
         @NotBlank String name,
         @NotBlank String department,
-        @NotBlank String password
+        @NotBlank String password,
+        @Email @NotBlank String email,
+        @NotBlank String code
 ) {}

@@ -3,6 +3,8 @@ package com.example.hcp.domain.account.service;
 import com.example.hcp.api.auth.TokenResponse;
 import com.example.hcp.domain.account.entity.User;
 import com.example.hcp.domain.account.repository.UserRepository;
+import com.example.hcp.domain.verification.EmailPurpose;
+import com.example.hcp.domain.verification.EmailVerificationService;
 import com.example.hcp.global.exception.ApiException;
 import com.example.hcp.global.exception.ErrorCode;
 import com.example.hcp.global.security.JwtTokenProvider;
@@ -18,14 +20,27 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final EmailVerificationService emailVerificationService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtTokenProvider jwtTokenProvider) {
+    public AuthService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            JwtTokenProvider jwtTokenProvider,
+            EmailVerificationService emailVerificationService
+    ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.emailVerificationService = emailVerificationService;
     }
 
-    public AuthResult signup(String loginId, String studentNo, String name, String department, String password) {
+    public AuthResult signup(
+            String loginId, String studentNo, String name, String department, String password,
+            String email, String code
+    ) {
+        // 이메일 인증(회원가입)
+        emailVerificationService.verify(email, EmailPurpose.SIGNUP, code);
+
         userRepository.findByLoginId(loginId).ifPresent(u -> {
             throw new ApiException(ErrorCode.CONFLICT, "LOGIN_ID_ALREADY_EXISTS");
         });
@@ -34,11 +49,16 @@ public class AuthService {
             throw new ApiException(ErrorCode.CONFLICT, "STUDENT_NO_ALREADY_EXISTS");
         });
 
+        userRepository.findByEmail(email).ifPresent(u -> {
+            throw new ApiException(ErrorCode.CONFLICT, "EMAIL_ALREADY_EXISTS");
+        });
+
         User user = new User();
         user.setLoginId(loginId);
         user.setStudentNo(studentNo);
         user.setName(name);
         user.setDepartment(department);
+        user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setRole(Role.USER);
 
@@ -54,7 +74,8 @@ public class AuthService {
                 user.getLoginId(),
                 user.getStudentNo(),
                 user.getName(),
-                user.getDepartment()
+                user.getDepartment(),
+                user.getEmail()
         );
         return new AuthResult(body, refreshToken);
     }
@@ -77,7 +98,8 @@ public class AuthService {
                 user.getLoginId(),
                 user.getStudentNo(),
                 user.getName(),
-                user.getDepartment()
+                user.getDepartment(),
+                user.getEmail()
         );
         return new AuthResult(body, refreshToken);
     }
@@ -102,8 +124,30 @@ public class AuthService {
                 user.getLoginId(),
                 user.getStudentNo(),
                 user.getName(),
-                user.getDepartment()
+                user.getDepartment(),
+                user.getEmail()
         );
         return new AuthResult(body, newRefresh);
+    }
+
+    // 아이디 찾기 (이메일 + 코드)
+    public String findLoginIdByEmail(String email, String code) {
+        emailVerificationService.verify(email, EmailPurpose.FIND_ID, code);
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "USER_NOT_FOUND"));
+
+        return user.getLoginId();
+    }
+
+    // 비밀번호 재설정 (이메일 + 코드)
+    public void resetPasswordByEmail(String email, String code, String newPassword) {
+        emailVerificationService.verify(email, EmailPurpose.RESET_PASSWORD, code);
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "USER_NOT_FOUND"));
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
     }
 }
