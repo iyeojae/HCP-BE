@@ -36,11 +36,22 @@ public class ApplicationStudentController {
         ApplicationForm form = applicationStudentService.form(clubId);
         List<FormQuestion> qs = applicationStudentService.formQuestions(clubId);
 
-        List<String> labels = qs.stream()
-                .map(FormQuestion::getLabel)
+        List<FormResponse.Item> items = qs.stream()
+                .map(q -> new FormResponse.Item(
+                        q.getId(),
+                        q.getOrderNo(),
+                        q.getTemplateNo(),
+                        q.getLabel(),
+                        q.getPayloadJson()
+                ))
                 .toList();
 
-        return new FormResponse(form.getId(), clubId, labels);
+        return new FormResponse(
+                form.getId(),
+                clubId,
+                form.getItemCount(),   // ApplicationForm에 itemCount 추가된 상태 기준
+                items
+        );
     }
 
     @PostMapping("/clubs/{clubId}/applications")
@@ -53,7 +64,6 @@ public class ApplicationStudentController {
         return new SubmitApplicationResponse(appId);
     }
 
-    // ✅ 변경: 래퍼(MyApplicationsResponse)로 감싸지 않고 List를 그대로 반환
     @GetMapping("/applications")
     public List<MyApplicationsResponse.Item> my(@AuthenticationPrincipal SecurityUser me) {
         List<Application> apps = applicationStudentService.myApplications(me.userId());

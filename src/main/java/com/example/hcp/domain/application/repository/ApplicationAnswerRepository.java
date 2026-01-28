@@ -10,9 +10,10 @@ import java.util.List;
 public interface ApplicationAnswerRepository extends JpaRepository<ApplicationAnswer, Long> {
 
     List<ApplicationAnswer> findByApplication_IdOrderByIdAsc(Long applicationId);
+
     void deleteByApplication_Id(Long applicationId);
 
-    // ✅ 추가: answers 조회 시 question 미리 로딩
+    // ✅ 답변 조회 시 question 미리 로딩 + 질문(orderNo) 순서대로 정렬
     @EntityGraph(attributePaths = {"question"})
-    List<ApplicationAnswer> findWithQuestionByApplication_IdOrderByIdAsc(Long applicationId);
+    List<ApplicationAnswer> findWithQuestionByApplication_IdOrderByQuestion_OrderNoAsc(Long applicationId);
 }

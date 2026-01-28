@@ -59,7 +59,6 @@ public class ClubAdminController {
         return new MyClubsResponse(clubAccessService.myClubIds(me.userId()));
     }
 
-    // ✅ 수정은 CLUB_ADMIN(자기 동아리만) + ADMIN
     @PutMapping("/clubs/{clubId}")
     public void updateClub(
             @AuthenticationPrincipal SecurityUser me,
@@ -88,7 +87,7 @@ public class ClubAdminController {
     public UploadMediaResponse uploadMedia(
             @AuthenticationPrincipal SecurityUser me,
             @PathVariable Long clubId,
-            @RequestParam(required = false) Long postId, // posts 없애면 프론트에서는 그냥 안 보내면 됨(null)
+            @RequestParam(required = false) Long postId,
             @RequestPart MultipartFile file
     ) {
         if (!me.role().name().equals("ADMIN")) {
@@ -108,7 +107,8 @@ public class ClubAdminController {
             clubAccessService.assertClubAdminAccess(me.userId(), clubId);
         }
 
-        Long formId = formCommandService.upsertForm(clubId, req.labels()).getId();
+        // ✅ 변경: labels(List<String>) -> FormUpsertRequest(템플릿/순서/구성 포함)
+        Long formId = formCommandService.upsertForm(clubId, req).getId();
         return new UpsertFormResponse(formId);
     }
 

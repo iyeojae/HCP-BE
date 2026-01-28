@@ -6,5 +6,14 @@ import java.util.List;
 public record FormResponse(
         Long formId,
         Long clubId,
-        List<String> labels
-) {}
+        Integer itemCount,
+        List<Item> items
+) {
+    public record Item(
+            Long questionId,
+            Integer orderNo,
+            Integer templateNo,
+            String title,
+            String payloadJson
+    ) {}
+}

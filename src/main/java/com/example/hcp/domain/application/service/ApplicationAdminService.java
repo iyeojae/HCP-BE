@@ -34,7 +34,8 @@ public class ApplicationAdminService {
     }
 
     public List<ApplicationAnswer> answers(Long applicationId) {
-        return answerRepository.findWithQuestionByApplication_IdOrderByIdAsc(applicationId);
+        // ✅ 질문 orderNo 순서대로 반환(화면 표시 순서 보장)
+        return answerRepository.findWithQuestionByApplication_IdOrderByQuestion_OrderNoAsc(applicationId);
     }
 
     @Transactional
