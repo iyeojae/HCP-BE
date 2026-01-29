@@ -12,11 +12,9 @@ import java.util.List;
 
 public record FormUpsertRequest(
 
-        // "총 몇개 질문(블록)을 만들었는지"
         @NotNull
         Integer totalItems,
 
-        // orderNo 순서대로 화면에 노출
         @NotEmpty
         @Valid
         List<Item> items
@@ -25,36 +23,34 @@ public record FormUpsertRequest(
                 @NotNull
                 Integer orderNo,
 
-                // 1~6 중 하나
                 @NotNull
                 @Min(1) @Max(6)
                 Integer templateNo,
 
-                // 질문 제목(블록 제목)
                 @NotBlank
                 String title,
 
-                // 템플릿별 구성값(선택 필드들)
+                @NotNull
                 @Valid
                 Payload payload
         ) {}
 
         public record Payload(
 
-                // [템플릿 1] 단어 11개 / [템플릿 6] 단어 8개 (서비스에서 templateNo 기준으로 검증)
+                // [템플릿 1] 11개 / [템플릿 6] 8개
                 List<String> words,
 
-                // [템플릿 2] 질문 3개 (각 질문은 0~3 선택으로 답변)
+                // [템플릿 2] 질문 3개
                 List<String> questions,
 
-                // [템플릿 3] 문장 4개 중 선택
+                // [템플릿 3] 문장 4개
                 List<String> sentences,
 
-                // [템플릿 4] 질문 2개 + 각 질문별 단어 리스트
+                // [템플릿 4]
                 TwoWordQuestions twoWordQuestions,
 
-                // [템플릿 5] 질문 2개(자유서술 등은 서비스/프론트에서 처리)
-                TwoTextQuestions twoTextQuestions
+                // [템플릿 5] ✅ 1번문항: 숫자옵션 + boolean옵션 / 2번문항: 자유서술(제목만)
+                Template5Questions template5Questions
         ) {}
 
         public record TwoWordQuestions(
@@ -64,8 +60,10 @@ public record FormUpsertRequest(
                 List<String> question2Words
         ) {}
 
-        public record TwoTextQuestions(
+        public record Template5Questions(
                 @NotBlank String question1Title,
-                @NotBlank String question2Title
+                List<Integer> numberOptions,     // 예: [0,1,2,3]
+                List<Boolean> booleanOptions,    // 예: [true,false]
+                @NotBlank String question2Title  // 자유서술 제목
         ) {}
 }

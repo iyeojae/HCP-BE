@@ -107,7 +107,6 @@ public class ClubAdminController {
             clubAccessService.assertClubAdminAccess(me.userId(), clubId);
         }
 
-        // ✅ 변경: labels(List<String>) -> FormUpsertRequest(템플릿/순서/구성 포함)
         Long formId = formCommandService.upsertForm(clubId, req).getId();
         return new UpsertFormResponse(formId);
     }
@@ -151,9 +150,14 @@ public class ClubAdminController {
 
         List<ApplicationAnswer> answers = applicationAdminService.answers(applicationId);
 
+        // ✅ 질문 메타(템플릿/순서/payload) + 답변 value 같이 내려줌
         List<ApplicationDetailResponse.Answer> answerDtos = answers.stream().map(a ->
                 new ApplicationDetailResponse.Answer(
+                        a.getQuestion().getId(),
+                        a.getQuestion().getOrderNo(),
+                        a.getQuestion().getTemplateNo(),
                         a.getQuestion().getLabel(),
+                        a.getQuestion().getPayloadJson(),
                         a.getValueText()
                 )
         ).toList();

@@ -46,10 +46,15 @@ public class ApplicationStudentController {
                 ))
                 .toList();
 
+        Integer itemCount = form.getItemCount();
+        if (itemCount == null || itemCount <= 0) {
+            itemCount = items.size();
+        }
+
         return new FormResponse(
                 form.getId(),
                 clubId,
-                form.getItemCount(),   // ApplicationForm에 itemCount 추가된 상태 기준
+                itemCount,
                 items
         );
     }

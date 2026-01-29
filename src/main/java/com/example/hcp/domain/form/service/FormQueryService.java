@@ -31,7 +31,6 @@ public class FormQueryService {
         return questionRepository.findByForm_IdOrderByOrderNoAsc(formId);
     }
 
-    // ✅ (선택) clubId로 바로 질문 블록 조회가 필요하면 사용
     public List<FormQuestion> questionsByClubId(Long clubId) {
         ApplicationForm form = getFormByClubId(clubId);
         return questions(form.getId());

@@ -4,7 +4,6 @@ package com.example.hcp.domain.form.entity;
 import com.example.hcp.domain.club.entity.Club;
 import jakarta.persistence.*;
 import lombok.Getter;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
@@ -15,23 +14,39 @@ import java.time.LocalDateTime;
 })
 public class ApplicationForm {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Setter
+    // 생성 시에만 설정(폼 생성 이후 club 변경은 막는게 안전)
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "club_id", nullable = false)
+    @JoinColumn(name = "club_id", nullable = false, updatable = false)
     private Club club;
 
-    // ✅ 폼에 포함된 "질문 블록" 개수(요청의 totalItems)
-    @Setter
+    // ✅ 총 블록(문항) 개수 (null 방지 위해 primitive)
     @Column(name = "item_count", nullable = false)
     private int itemCount = 0;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    public ApplicationForm() {}
+    // JPA용
+    protected ApplicationForm() {}
+
+    // ✅ 권장: 생성은 팩토리로만
+    public static ApplicationForm create(Club club) {
+        if (club == null) throw new IllegalArgumentException("club must not be null");
+        ApplicationForm f = new ApplicationForm();
+        f.club = club;
+        f.itemCount = 0;
+        return f;
+    }
+
+    // ✅ 블록 개수 갱신
+    public void setItemCount(int itemCount) {
+        if (itemCount < 0) throw new IllegalArgumentException("itemCount must be >= 0");
+        this.itemCount = itemCount;
+    }
 
     @PrePersist
     void prePersist() {
