@@ -11,12 +11,14 @@ import com.example.hcp.global.exception.ApiException;
 import com.example.hcp.global.exception.ErrorCode;
 import com.example.hcp.global.security.SecurityUser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/student")
@@ -45,23 +47,53 @@ public class ApplicationStudentController {
         List<FormQuestion> qs = applicationStudentService.formQuestions(clubId);
 
         List<FormResponse.Item> items = qs.stream()
-                .map(q -> new FormResponse.Item(
-                        q.getOrderNo(),
-                        q.getTemplateNo(),
-                        q.getLabel(),
-                        parsePayloadObject(q.getPayloadJson())
-                ))
+                .map(this::toResponseItem)
                 .toList();
 
-        int totalItems = form.getItemCount() > 0 ? form.getItemCount() : items.size();
+        // ✅ 요청과 동일 의미로 totalItems는 items.size()로 고정
+        int totalItems = items.size();
         return new FormResponse(totalItems, items);
     }
 
-    private Object parsePayloadObject(String payloadJson) {
-        if (payloadJson == null || payloadJson.isBlank()) return null;
+    private FormResponse.Item toResponseItem(FormQuestion q) {
+        Map<String, Object> payload = parsePayloadMap(q.getPayloadJson());
+
+        List<String> words = payload.containsKey("words")
+                ? objectMapper.convertValue(payload.get("words"), new TypeReference<List<String>>() {})
+                : null;
+
+        List<String> questions = payload.containsKey("questions")
+                ? objectMapper.convertValue(payload.get("questions"), new TypeReference<List<String>>() {})
+                : null;
+
+        List<String> sentences = payload.containsKey("sentences")
+                ? objectMapper.convertValue(payload.get("sentences"), new TypeReference<List<String>>() {})
+                : null;
+
+        FormResponse.TwoWordQuestions twoWordQuestions = payload.containsKey("twoWordQuestions")
+                ? objectMapper.convertValue(payload.get("twoWordQuestions"), FormResponse.TwoWordQuestions.class)
+                : null;
+
+        FormResponse.Template5Questions template5Questions = payload.containsKey("template5Questions")
+                ? objectMapper.convertValue(payload.get("template5Questions"), FormResponse.Template5Questions.class)
+                : null;
+
+        return new FormResponse.Item(
+                q.getOrderNo(),
+                q.getTemplateNo(),
+                q.getLabel(),
+                words,
+                questions,
+                sentences,
+                twoWordQuestions,
+                template5Questions
+        );
+    }
+
+    private Map<String, Object> parsePayloadMap(String payloadJson) {
+        if (payloadJson == null || payloadJson.isBlank()) return Map.of();
         try {
-            // Map/List로 파싱되므로 그대로 JSON으로 깔끔하게 직렬화됨
-            return objectMapper.readValue(payloadJson, Object.class);
+            return objectMapper.readValue(payloadJson, new TypeReference<Map<String, Object>>() {});
         } catch (JsonProcessingException e) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_PAYLOAD_JSON");
         }

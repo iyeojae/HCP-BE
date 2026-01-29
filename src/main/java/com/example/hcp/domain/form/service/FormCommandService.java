@@ -16,12 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @Service
 public class FormCommandService {
@@ -57,7 +52,6 @@ public class FormCommandService {
 
         validateUpsertRequest(req);
 
-        // ✅ 팩토리 사용
         ApplicationForm form = formRepository.findByClub_Id(clubId)
                 .orElseGet(() -> formRepository.save(ApplicationForm.create(club)));
 
@@ -70,8 +64,7 @@ public class FormCommandService {
                 .toList();
 
         for (FormUpsertRequest.Item item : sorted) {
-            // ✅ 핵심: 템플릿 기준으로 필요한 키만 JSON 저장 (null 키 제거)
-            String payloadJson = toTemplatePayloadJson(item.templateNo(), item.payload());
+            String payloadJson = toTemplatePayloadJson(item);
 
             FormQuestion q = new FormQuestion(
                     form,
@@ -92,6 +85,7 @@ public class FormCommandService {
         if (req.items() == null || req.items().isEmpty()) throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ITEMS");
         if (!req.totalItems().equals(req.items().size())) throw new ApiException(ErrorCode.BAD_REQUEST, "TOTAL_ITEMS_MISMATCH");
 
+        // orderNo 유니크 + 1..N 연속
         Set<Integer> seen = new HashSet<>();
         for (FormUpsertRequest.Item item : req.items()) {
             if (item == null) throw new ApiException(ErrorCode.BAD_REQUEST, "NULL_ITEM");
@@ -102,6 +96,7 @@ public class FormCommandService {
             if (!seen.contains(i)) throw new ApiException(ErrorCode.BAD_REQUEST, "ORDER_NO_NOT_CONTIGUOUS");
         }
 
+        // 템플릿별 필드 검증 (payload 래퍼 없이 Item 직접 필드로)
         for (FormUpsertRequest.Item item : req.items()) {
             if (item.templateNo() == null || item.templateNo() < 1 || item.templateNo() > 6) {
                 throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_TEMPLATE_NO");
@@ -109,19 +104,14 @@ public class FormCommandService {
             if (item.title() == null || item.title().isBlank()) {
                 throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_TITLE");
             }
-            if (item.payload() == null) {
-                throw new ApiException(ErrorCode.BAD_REQUEST, "PAYLOAD_REQUIRED");
-            }
-
-            FormUpsertRequest.Payload p = item.payload();
 
             switch (item.templateNo()) {
-                case 1 -> requireStringListSize(p.words(), 11, "T1_WORDS_11_REQUIRED");
-                case 2 -> requireStringListSize(p.questions(), 3, "T2_QUESTIONS_3_REQUIRED");
-                case 3 -> requireStringListSize(p.sentences(), 4, "T3_SENTENCES_4_REQUIRED");
+                case 1 -> requireStringListSize(item.words(), 11, "T1_WORDS_11_REQUIRED");
+                case 2 -> requireStringListSize(item.questions(), 3, "T2_QUESTIONS_3_REQUIRED");
+                case 3 -> requireStringListSize(item.sentences(), 4, "T3_SENTENCES_4_REQUIRED");
                 case 4 -> {
-                    if (p.twoWordQuestions() == null) throw new ApiException(ErrorCode.BAD_REQUEST, "T4_PAYLOAD_REQUIRED");
-                    var tw = p.twoWordQuestions();
+                    if (item.twoWordQuestions() == null) throw new ApiException(ErrorCode.BAD_REQUEST, "T4_REQUIRED");
+                    var tw = item.twoWordQuestions();
                     if (tw.question1Title() == null || tw.question1Title().isBlank()
                             || tw.question2Title() == null || tw.question2Title().isBlank()) {
                         throw new ApiException(ErrorCode.BAD_REQUEST, "T4_TITLES_REQUIRED");
@@ -130,18 +120,17 @@ public class FormCommandService {
                     requireStringListSize(tw.question2Words(), 3, "T4_Q2_WORDS_3_REQUIRED");
                 }
                 case 5 -> {
-                    if (p.template5Questions() == null) throw new ApiException(ErrorCode.BAD_REQUEST, "T5_PAYLOAD_REQUIRED");
-                    var t5 = p.template5Questions();
+                    if (item.template5Questions() == null) throw new ApiException(ErrorCode.BAD_REQUEST, "T5_REQUIRED");
+                    var t5 = item.template5Questions();
 
                     if (t5.question1Title() == null || t5.question1Title().isBlank()
                             || t5.question2Title() == null || t5.question2Title().isBlank()) {
                         throw new ApiException(ErrorCode.BAD_REQUEST, "T5_TITLES_REQUIRED");
                     }
-
                     requireIntListExact(t5.numberOptions(), List.of(0, 1, 2, 3), "T5_NUMBER_OPTIONS_REQUIRED");
                     requireBooleanOptions(t5.booleanOptions(), "T5_BOOLEAN_OPTIONS_REQUIRED");
                 }
-                case 6 -> requireStringListSize(p.words(), 8, "T6_WORDS_8_REQUIRED");
+                case 6 -> requireStringListSize(item.words(), 8, "T6_WORDS_8_REQUIRED");
             }
         }
     }
@@ -170,18 +159,17 @@ public class FormCommandService {
         if (!hasTrue || !hasFalse) throw new ApiException(ErrorCode.BAD_REQUEST, code);
     }
 
-    // ✅ 핵심: 요청 payload처럼 필요한 키만 저장 (null 필드 제거)
-    private String toTemplatePayloadJson(int templateNo, FormUpsertRequest.Payload p) {
+    // ✅ DB에는 템플릿별 필요한 키만 저장 (요청/응답에서 payload 래퍼 제거해도 유지됨)
+    private String toTemplatePayloadJson(FormUpsertRequest.Item item) {
         try {
             Map<String, Object> m = new LinkedHashMap<>();
 
-            switch (templateNo) {
-                case 1, 6 -> m.put("words", p.words());
-                case 2 -> m.put("questions", p.questions());
-                case 3 -> m.put("sentences", p.sentences());
-                case 4 -> m.put("twoWordQuestions", p.twoWordQuestions());
-                case 5 -> m.put("template5Questions", p.template5Questions());
-                default -> { /* no-op */ }
+            switch (item.templateNo()) {
+                case 1, 6 -> m.put("words", item.words());
+                case 2 -> m.put("questions", item.questions());
+                case 3 -> m.put("sentences", item.sentences());
+                case 4 -> m.put("twoWordQuestions", item.twoWordQuestions());
+                case 5 -> m.put("template5Questions", item.template5Questions());
             }
 
             return objectMapper.writeValueAsString(m);

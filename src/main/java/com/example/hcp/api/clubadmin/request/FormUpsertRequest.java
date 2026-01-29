@@ -20,30 +20,27 @@ public record FormUpsertRequest(
         @Valid
         List<Item> items
 ) {
+        // ✅ payload 래퍼 제거: Item 바로 아래에 템플릿별 필드가 위치
+        @JsonInclude(JsonInclude.Include.NON_NULL)
         public record Item(
-                @NotNull
-                Integer orderNo,
+                @NotNull Integer orderNo,
 
-                @NotNull
-                @Min(1) @Max(6)
+                @NotNull @Min(1) @Max(6)
                 Integer templateNo,
 
                 @NotBlank
                 String title,
 
-                @NotNull
-                @Valid
-                Payload payload
-        ) {}
+                // 템플릿별 사용 필드(서비스에서 templateNo 기준 검증)
+                List<String> words,          // T1(11개), T6(8개)
+                List<String> questions,      // T2(3개)
+                List<String> sentences,      // T3(4개)
 
-        // ✅ null 필드(words/questions/...)는 JSON에서 아예 빠짐
-        @JsonInclude(JsonInclude.Include.NON_NULL)
-        public record Payload(
-                List<String> words,
-                List<String> questions,
-                List<String> sentences,
-                TwoWordQuestions twoWordQuestions,
-                Template5Questions template5Questions
+                @Valid
+                TwoWordQuestions twoWordQuestions,      // T4
+
+                @Valid
+                Template5Questions template5Questions   // T5
         ) {}
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
