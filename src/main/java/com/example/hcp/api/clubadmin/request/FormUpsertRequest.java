@@ -1,6 +1,7 @@
 // src/main/java/com/example/hcp/api/clubadmin/request/FormUpsertRequest.java
 package com.example.hcp.api.clubadmin.request;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -35,24 +36,17 @@ public record FormUpsertRequest(
                 Payload payload
         ) {}
 
+        // ✅ null 필드(words/questions/...)는 JSON에서 아예 빠짐
+        @JsonInclude(JsonInclude.Include.NON_NULL)
         public record Payload(
-
-                // [템플릿 1] 11개 / [템플릿 6] 8개
                 List<String> words,
-
-                // [템플릿 2] 질문 3개
                 List<String> questions,
-
-                // [템플릿 3] 문장 4개
                 List<String> sentences,
-
-                // [템플릿 4]
                 TwoWordQuestions twoWordQuestions,
-
-                // [템플릿 5] ✅ 1번문항: 숫자옵션 + boolean옵션 / 2번문항: 자유서술(제목만)
                 Template5Questions template5Questions
         ) {}
 
+        @JsonInclude(JsonInclude.Include.NON_NULL)
         public record TwoWordQuestions(
                 @NotBlank String question1Title,
                 List<String> question1Words,
@@ -60,6 +54,7 @@ public record FormUpsertRequest(
                 List<String> question2Words
         ) {}
 
+        @JsonInclude(JsonInclude.Include.NON_NULL)
         public record Template5Questions(
                 @NotBlank String question1Title,
                 List<Integer> numberOptions,     // 예: [0,1,2,3]

@@ -18,22 +18,18 @@ public class ApplicationForm {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 생성 시에만 설정(폼 생성 이후 club 변경은 막는게 안전)
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id", nullable = false, updatable = false)
     private Club club;
 
-    // ✅ 총 블록(문항) 개수 (null 방지 위해 primitive)
     @Column(name = "item_count", nullable = false)
     private int itemCount = 0;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // JPA용
     protected ApplicationForm() {}
 
-    // ✅ 권장: 생성은 팩토리로만
     public static ApplicationForm create(Club club) {
         if (club == null) throw new IllegalArgumentException("club must not be null");
         ApplicationForm f = new ApplicationForm();
@@ -42,7 +38,6 @@ public class ApplicationForm {
         return f;
     }
 
-    // ✅ 블록 개수 갱신
     public void setItemCount(int itemCount) {
         if (itemCount < 0) throw new IllegalArgumentException("itemCount must be >= 0");
         this.itemCount = itemCount;

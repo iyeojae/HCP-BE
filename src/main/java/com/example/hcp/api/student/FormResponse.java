@@ -4,16 +4,13 @@ package com.example.hcp.api.student;
 import java.util.List;
 
 public record FormResponse(
-        Long formId,
-        Long clubId,
-        Integer itemCount,
+        Integer totalItems,
         List<Item> items
 ) {
     public record Item(
-            Long questionId,
             Integer orderNo,
             Integer templateNo,
             String title,
-            String payloadJson
+            Object payload
     ) {}
 }

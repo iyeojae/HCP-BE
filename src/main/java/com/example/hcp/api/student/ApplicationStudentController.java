@@ -10,6 +10,8 @@ import com.example.hcp.domain.form.entity.FormQuestion;
 import com.example.hcp.global.exception.ApiException;
 import com.example.hcp.global.exception.ErrorCode;
 import com.example.hcp.global.security.SecurityUser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -22,10 +24,16 @@ public class ApplicationStudentController {
 
     private final ApplicationStudentService applicationStudentService;
     private final ClubRepository clubRepository;
+    private final ObjectMapper objectMapper;
 
-    public ApplicationStudentController(ApplicationStudentService applicationStudentService, ClubRepository clubRepository) {
+    public ApplicationStudentController(
+            ApplicationStudentService applicationStudentService,
+            ClubRepository clubRepository,
+            ObjectMapper objectMapper
+    ) {
         this.applicationStudentService = applicationStudentService;
         this.clubRepository = clubRepository;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/clubs/{clubId}/form")
@@ -38,25 +46,25 @@ public class ApplicationStudentController {
 
         List<FormResponse.Item> items = qs.stream()
                 .map(q -> new FormResponse.Item(
-                        q.getId(),
                         q.getOrderNo(),
                         q.getTemplateNo(),
                         q.getLabel(),
-                        q.getPayloadJson()
+                        parsePayloadObject(q.getPayloadJson())
                 ))
                 .toList();
 
-        Integer itemCount = form.getItemCount();
-        if (itemCount == null || itemCount <= 0) {
-            itemCount = items.size();
-        }
+        int totalItems = form.getItemCount() > 0 ? form.getItemCount() : items.size();
+        return new FormResponse(totalItems, items);
+    }
 
-        return new FormResponse(
-                form.getId(),
-                clubId,
-                itemCount,
-                items
-        );
+    private Object parsePayloadObject(String payloadJson) {
+        if (payloadJson == null || payloadJson.isBlank()) return null;
+        try {
+            // Map/List로 파싱되므로 그대로 JSON으로 깔끔하게 직렬화됨
+            return objectMapper.readValue(payloadJson, Object.class);
+        } catch (JsonProcessingException e) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_PAYLOAD_JSON");
+        }
     }
 
     @PostMapping("/clubs/{clubId}/applications")
