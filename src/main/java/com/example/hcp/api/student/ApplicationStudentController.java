@@ -51,32 +51,33 @@ public class ApplicationStudentController {
                 .toList();
 
         // ✅ 요청과 동일 의미로 totalItems는 items.size()로 고정
-        int totalItems = items.size();
-        return new FormResponse(totalItems, items);
+        return new FormResponse(items.size(), items);
     }
 
     private FormResponse.Item toResponseItem(FormQuestion q) {
         Map<String, Object> payload = parsePayloadMap(q.getPayloadJson());
+        int t = q.getTemplateNo();
 
-        List<String> words = payload.containsKey("words")
-                ? objectMapper.convertValue(payload.get("words"), new TypeReference<List<String>>() {})
-                : null;
+        List<String> words = null;
+        List<String> questions = null;
+        List<String> sentences = null;
+        FormResponse.TwoWordQuestions twoWordQuestions = null;
+        FormResponse.Template5Questions template5Questions = null;
 
-        List<String> questions = payload.containsKey("questions")
-                ? objectMapper.convertValue(payload.get("questions"), new TypeReference<List<String>>() {})
-                : null;
-
-        List<String> sentences = payload.containsKey("sentences")
-                ? objectMapper.convertValue(payload.get("sentences"), new TypeReference<List<String>>() {})
-                : null;
-
-        FormResponse.TwoWordQuestions twoWordQuestions = payload.containsKey("twoWordQuestions")
-                ? objectMapper.convertValue(payload.get("twoWordQuestions"), FormResponse.TwoWordQuestions.class)
-                : null;
-
-        FormResponse.Template5Questions template5Questions = payload.containsKey("template5Questions")
-                ? objectMapper.convertValue(payload.get("template5Questions"), FormResponse.Template5Questions.class)
-                : null;
+        // ✅ templateNo 기준으로 필요한 값만 꺼냄 (응답이 요청 형태처럼 깔끔해지고, 불필요한 변환 제거)
+        switch (t) {
+            case 1, 6 -> words = asStringList(payload.get("words"));
+            case 2 -> questions = asStringList(payload.get("questions"));
+            case 3 -> sentences = asStringList(payload.get("sentences"));
+            case 4 -> {
+                Object v = payload.get("twoWordQuestions");
+                twoWordQuestions = (v == null) ? null : objectMapper.convertValue(v, FormResponse.TwoWordQuestions.class);
+            }
+            case 5 -> {
+                Object v = payload.get("template5Questions");
+                template5Questions = (v == null) ? null : objectMapper.convertValue(v, FormResponse.Template5Questions.class);
+            }
+        }
 
         return new FormResponse.Item(
                 q.getOrderNo(),
@@ -88,6 +89,11 @@ public class ApplicationStudentController {
                 twoWordQuestions,
                 template5Questions
         );
+    }
+
+    private List<String> asStringList(Object v) {
+        if (v == null) return null;
+        return objectMapper.convertValue(v, new TypeReference<List<String>>() {});
     }
 
     private Map<String, Object> parsePayloadMap(String payloadJson) {

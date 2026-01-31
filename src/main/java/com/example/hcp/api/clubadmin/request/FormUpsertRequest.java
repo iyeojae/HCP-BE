@@ -32,15 +32,15 @@ public record FormUpsertRequest(
                 String title,
 
                 // 템플릿별 사용 필드(서비스에서 templateNo 기준 검증)
-                List<String> words,          // T1(11개), T6(8개)
-                List<String> questions,      // T2(3개)
-                List<String> sentences,      // T3(4개)
+                List<String> words,               // T1(11개), T6(8개)
+                List<String> questions,           // T2(3개)
+                List<String> sentences,           // T3(4개)
 
                 @Valid
-                TwoWordQuestions twoWordQuestions,      // T4
+                TwoWordQuestions twoWordQuestions, // T4
 
                 @Valid
-                Template5Questions template5Questions   // T5
+                Template5Questions template5Questions // T5
         ) {}
 
         @JsonInclude(JsonInclude.Include.NON_NULL)

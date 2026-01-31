@@ -13,11 +13,16 @@ import com.example.hcp.domain.club.entity.Club;
 import com.example.hcp.domain.club.service.ClubCommandService;
 import com.example.hcp.domain.content.entity.MediaFile;
 import com.example.hcp.domain.content.service.ContentCommandService;
+import com.example.hcp.domain.form.entity.FormQuestion;
 import com.example.hcp.domain.form.service.FormCommandService;
 import com.example.hcp.domain.stats.service.ClubDashboardService;
 import com.example.hcp.global.exception.ApiException;
 import com.example.hcp.global.exception.ErrorCode;
 import com.example.hcp.global.security.SecurityUser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/clubadmin")
@@ -37,6 +43,7 @@ public class ClubAdminController {
     private final FormCommandService formCommandService;
     private final ApplicationAdminService applicationAdminService;
     private final ClubDashboardService clubDashboardService;
+    private final ObjectMapper objectMapper;
 
     public ClubAdminController(
             ClubAccessService clubAccessService,
@@ -44,7 +51,8 @@ public class ClubAdminController {
             ContentCommandService contentCommandService,
             FormCommandService formCommandService,
             ApplicationAdminService applicationAdminService,
-            ClubDashboardService clubDashboardService
+            ClubDashboardService clubDashboardService,
+            ObjectMapper objectMapper
     ) {
         this.clubAccessService = clubAccessService;
         this.clubCommandService = clubCommandService;
@@ -52,6 +60,7 @@ public class ClubAdminController {
         this.formCommandService = formCommandService;
         this.applicationAdminService = applicationAdminService;
         this.clubDashboardService = clubDashboardService;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/clubs")
@@ -150,17 +159,9 @@ public class ClubAdminController {
 
         List<ApplicationAnswer> answers = applicationAdminService.answers(applicationId);
 
-        // ✅ 질문 메타(템플릿/순서/payload) + 답변 value 같이 내려줌
-        List<ApplicationDetailResponse.Answer> answerDtos = answers.stream().map(a ->
-                new ApplicationDetailResponse.Answer(
-                        a.getQuestion().getId(),
-                        a.getQuestion().getOrderNo(),
-                        a.getQuestion().getTemplateNo(),
-                        a.getQuestion().getLabel(),
-                        a.getQuestion().getPayloadJson(),
-                        a.getValueText()
-                )
-        ).toList();
+        // ✅ 질문(템플릿 필드 펼친 형태) + 지원자 답변(value) 같이 내려줌
+        List<ApplicationDetailResponse.Answer> answerDtos =
+                answers.stream().map(this::toAnswerDto).toList();
 
         return new ApplicationDetailResponse(
                 app.getId(),
@@ -172,6 +173,69 @@ public class ClubAdminController {
                 app.getCreatedAt().toString(),
                 answerDtos
         );
+    }
+
+    private ApplicationDetailResponse.Answer toAnswerDto(ApplicationAnswer a) {
+        FormQuestion q = a.getQuestion();
+
+        Map<String, Object> payload = parsePayloadMap(q.getPayloadJson());
+
+        List<String> words = payload.containsKey("words")
+                ? objectMapper.convertValue(payload.get("words"), new TypeReference<List<String>>() {})
+                : null;
+
+        List<String> questions = payload.containsKey("questions")
+                ? objectMapper.convertValue(payload.get("questions"), new TypeReference<List<String>>() {})
+                : null;
+
+        List<String> sentences = payload.containsKey("sentences")
+                ? objectMapper.convertValue(payload.get("sentences"), new TypeReference<List<String>>() {})
+                : null;
+
+        ApplicationDetailResponse.TwoWordQuestions twoWordQuestions = payload.containsKey("twoWordQuestions")
+                ? objectMapper.convertValue(payload.get("twoWordQuestions"), ApplicationDetailResponse.TwoWordQuestions.class)
+                : null;
+
+        ApplicationDetailResponse.Template5Questions template5Questions = payload.containsKey("template5Questions")
+                ? objectMapper.convertValue(payload.get("template5Questions"), ApplicationDetailResponse.Template5Questions.class)
+                : null;
+
+        Object value = parseValueAny(a.getValueText());
+
+        return new ApplicationDetailResponse.Answer(
+                q.getOrderNo(),
+                q.getTemplateNo(),
+                q.getLabel(),
+                words,
+                questions,
+                sentences,
+                twoWordQuestions,
+                template5Questions,
+                value
+        );
+    }
+
+    private Map<String, Object> parsePayloadMap(String payloadJson) {
+        if (payloadJson == null || payloadJson.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(payloadJson, new TypeReference<Map<String, Object>>() {});
+        } catch (JsonProcessingException e) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_FORM_PAYLOAD_JSON");
+        }
+    }
+
+    private Object parseValueAny(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        if (s.isEmpty()) return "";
+
+        try {
+            JsonNode node = objectMapper.readTree(s);
+            return objectMapper.convertValue(node, Object.class); // Map/List/String/Number 등
+        } catch (JsonProcessingException e) {
+            // JSON이 아니면 문자열 그대로(텍스트 답변 호환)
+            return raw;
+        }
     }
 
     @PatchMapping("/clubs/{clubId}/applications/{applicationId}/status")

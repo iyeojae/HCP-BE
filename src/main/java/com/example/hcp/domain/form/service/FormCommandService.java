@@ -16,7 +16,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 public class FormCommandService {
@@ -159,7 +164,7 @@ public class FormCommandService {
         if (!hasTrue || !hasFalse) throw new ApiException(ErrorCode.BAD_REQUEST, code);
     }
 
-    // ✅ DB에는 템플릿별 필요한 키만 저장 (요청/응답에서 payload 래퍼 제거해도 유지됨)
+    // ✅ DB에는 템플릿별 필요한 키만 저장
     private String toTemplatePayloadJson(FormUpsertRequest.Item item) {
         try {
             Map<String, Object> m = new LinkedHashMap<>();
