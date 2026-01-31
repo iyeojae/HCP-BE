@@ -5,7 +5,6 @@ import com.example.hcp.domain.application.entity.Application;
 import com.example.hcp.domain.application.service.ApplicationStudentService;
 import com.example.hcp.domain.club.entity.Club;
 import com.example.hcp.domain.club.repository.ClubRepository;
-import com.example.hcp.domain.form.entity.ApplicationForm;
 import com.example.hcp.domain.form.entity.FormQuestion;
 import com.example.hcp.global.exception.ApiException;
 import com.example.hcp.global.exception.ErrorCode;
@@ -43,14 +42,12 @@ public class ApplicationStudentController {
             @AuthenticationPrincipal SecurityUser me,
             @PathVariable Long clubId
     ) {
-        ApplicationForm form = applicationStudentService.form(clubId);
-        List<FormQuestion> qs = applicationStudentService.formQuestions(clubId);
+        List<FormQuestion> qs = applicationStudentService.formQuestions(clubId); // orderNo ASC
 
         List<FormResponse.Item> items = qs.stream()
                 .map(this::toResponseItem)
                 .toList();
 
-        // ✅ 요청과 동일 의미로 totalItems는 items.size()로 고정
         return new FormResponse(items.size(), items);
     }
 
@@ -64,7 +61,6 @@ public class ApplicationStudentController {
         FormResponse.TwoWordQuestions twoWordQuestions = null;
         FormResponse.Template5Questions template5Questions = null;
 
-        // ✅ templateNo 기준으로 필요한 값만 꺼냄 (응답이 요청 형태처럼 깔끔해지고, 불필요한 변환 제거)
         switch (t) {
             case 1, 6 -> words = asStringList(payload.get("words"));
             case 2 -> questions = asStringList(payload.get("questions"));
@@ -77,6 +73,7 @@ public class ApplicationStudentController {
                 Object v = payload.get("template5Questions");
                 template5Questions = (v == null) ? null : objectMapper.convertValue(v, FormResponse.Template5Questions.class);
             }
+            default -> { /* no-op */ }
         }
 
         return new FormResponse.Item(
@@ -101,7 +98,7 @@ public class ApplicationStudentController {
         try {
             return objectMapper.readValue(payloadJson, new TypeReference<Map<String, Object>>() {});
         } catch (JsonProcessingException e) {
-            throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_PAYLOAD_JSON");
+            throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_FORM_PAYLOAD_JSON");
         }
     }
 

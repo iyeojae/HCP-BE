@@ -205,7 +205,7 @@ public class ClubAdminController {
         return new ApplicationDetailResponse.Answer(
                 q.getOrderNo(),
                 q.getTemplateNo(),
-                q.getLabel(),
+                q.getLabel(), // title
                 words,
                 questions,
                 sentences,
@@ -231,7 +231,7 @@ public class ClubAdminController {
 
         try {
             JsonNode node = objectMapper.readTree(s);
-            return objectMapper.convertValue(node, Object.class); // Map/List/String/Number 등
+            return objectMapper.convertValue(node, Object.class); // Map/List/String/Number/Boolean 등
         } catch (JsonProcessingException e) {
             // JSON이 아니면 문자열 그대로(텍스트 답변 호환)
             return raw;

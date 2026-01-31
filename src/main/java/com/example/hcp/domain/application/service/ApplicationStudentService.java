@@ -61,12 +61,16 @@ public class ApplicationStudentService {
     }
 
     @Transactional
-    public Long submit(Long userId, Long clubId, List<String> answers) {
+    public Long submit(Long userId, Long clubId, List<JsonNode> answers) {
         if (answers == null || answers.isEmpty()) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWERS");
         }
-        for (String a : answers) {
-            if (a == null || a.isBlank()) {
+        for (JsonNode a : answers) {
+            if (a == null || a.isNull()) {
+                throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWER");
+            }
+            // 텍스트 답변만 공백 방지(배열/객체는 템플릿별 검증에서 체크)
+            if (a.isTextual() && a.asText().isBlank()) {
                 throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWER");
             }
         }
@@ -92,6 +96,7 @@ public class ApplicationStudentService {
             throw new ApiException(ErrorCode.BAD_REQUEST, "ANSWER_COUNT_MISMATCH");
         }
 
+        // 템플릿별 검증
         for (int i = 0; i < questions.size(); i++) {
             validateAnswerByTemplate(questions.get(i), answers.get(i));
         }
@@ -103,11 +108,12 @@ public class ApplicationStudentService {
         application.setStatus(ApplicationStatus.RECEIVED);
         application = applicationRepository.save(application);
 
+        // 저장: 텍스트면 그대로, 배열/객체면 JSON 문자열로
         for (int i = 0; i < questions.size(); i++) {
             ApplicationAnswer ans = new ApplicationAnswer();
             ans.setApplication(application);
             ans.setQuestion(questions.get(i));
-            ans.setValueText(answers.get(i)); // JSON 또는 텍스트 그대로 저장
+            ans.setValueText(toValueText(answers.get(i)));
             answerRepository.save(ans);
         }
 
@@ -118,25 +124,25 @@ public class ApplicationStudentService {
         return applicationRepository.findByUser_IdOrderByIdDesc(userId);
     }
 
-    private void validateAnswerByTemplate(FormQuestion q, String rawAnswer) {
+    private String toValueText(JsonNode node) {
+        if (node == null || node.isNull()) return null;
+        if (node.isTextual()) return node.asText(); // template5 호환: "서술"
+        try {
+            return objectMapper.writeValueAsString(node);
+        } catch (JsonProcessingException e) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_ANSWER_JSON");
+        }
+    }
+
+    private void validateAnswerByTemplate(FormQuestion q, JsonNode ansNode) {
         int t = q.getTemplateNo();
 
         // (이전 폼 호환) templateNo=0: 문자열만
         if (t == 0) {
-            if (rawAnswer.isBlank()) throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWER");
-            return;
-        }
-
-        JsonNode ansNode;
-        try {
-            ansNode = objectMapper.readTree(rawAnswer);
-        } catch (JsonProcessingException e) {
-            // template 5는 텍스트만 보내는(=q2만) 호환을 허용
-            if (t == 5) {
-                if (rawAnswer.isBlank()) throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWER");
-                return;
+            if (ansNode == null || !ansNode.isTextual() || ansNode.asText().isBlank()) {
+                throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWER");
             }
-            throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_ANSWER_JSON");
+            return;
         }
 
         switch (t) {
@@ -169,6 +175,10 @@ public class ApplicationStudentService {
             }
 
             case 4 -> { // {"q1":["단어A"],"q2":["단어B"]} (문자열 1개도 허용)
+                if (ansNode == null || !ansNode.isObject()) {
+                    throw new ApiException(ErrorCode.BAD_REQUEST, "T4_Q1_Q2_REQUIRED");
+                }
+
                 JsonNode q1Node = ansNode.get("q1");
                 JsonNode q2Node = ansNode.get("q2");
                 if (q1Node == null || q2Node == null) throw new ApiException(ErrorCode.BAD_REQUEST, "T4_Q1_Q2_REQUIRED");
@@ -187,8 +197,16 @@ public class ApplicationStudentService {
             }
 
             case 5 -> {
-                // 권장 포맷: {"q1":{"number":2,"boolean":true},"q2":"서술"}
-                // 호환 포맷: {"q2":"서술"} 또는 "서술"
+                // 허용:
+                // 1) "서술"(텍스트만 = q2만)
+                // 2) {"q2":"서술"} 또는 {"q1":{"number":2,"boolean":true},"q2":"서술"}
+                if (ansNode == null) throw new ApiException(ErrorCode.BAD_REQUEST, "T5_INVALID_FORMAT");
+
+                if (ansNode.isTextual()) {
+                    if (ansNode.asText().isBlank()) throw new ApiException(ErrorCode.BAD_REQUEST, "T5_EMPTY_TEXT");
+                    return;
+                }
+
                 if (!ansNode.isObject()) {
                     throw new ApiException(ErrorCode.BAD_REQUEST, "T5_INVALID_FORMAT");
                 }
@@ -199,7 +217,9 @@ public class ApplicationStudentService {
                 }
 
                 JsonNode q1 = ansNode.get("q1");
-                if (q1 != null && q1.isObject()) {
+                if (q1 != null) {
+                    if (!q1.isObject()) throw new ApiException(ErrorCode.BAD_REQUEST, "T5_INVALID_FORMAT");
+
                     JsonNode numNode = q1.get("number");
                     JsonNode boolNode = q1.get("boolean");
 
@@ -248,7 +268,7 @@ public class ApplicationStudentService {
 
     private List<Boolean> payloadBooleanArray(String payloadJson, String path, String errorCode) {
         JsonNode node = payloadNode(payloadJson, path, errorCode);
-        if (node == null || !node.isArray()) throw new ApiException(ErrorCode.BAD_REQUEST, errorCode);
+        if (!node.isArray()) throw new ApiException(ErrorCode.BAD_REQUEST, errorCode);
         for (JsonNode n : node) {
             if (!n.isBoolean()) throw new ApiException(ErrorCode.BAD_REQUEST, errorCode);
         }
