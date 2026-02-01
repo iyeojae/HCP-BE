@@ -35,6 +35,11 @@ public class User {
     @Column(name = "department", nullable = false, length = 100)
     private String department;
 
+    // ✅ 추가: 학년
+    @Setter @Getter
+    @Column(name = "grade") // 기존 데이터/DDL-auto update 안전하게 nullable로 둠(요청 DTO에서 NotNull로 강제)
+    private Integer grade;
+
     @Setter @Getter
     @Column(name = "email", nullable = false, length = 120)
     private String email;

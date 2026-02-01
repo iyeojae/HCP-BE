@@ -8,5 +8,6 @@ public record TokenResponse(
         String studentNo,
         String name,
         String department,
+        Integer grade,   // ✅ 추가
         String email
 ) {}

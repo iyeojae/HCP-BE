@@ -35,11 +35,16 @@ public class AuthService {
     }
 
     public AuthResult signup(
-            String loginId, String studentNo, String name, String department, String password,
+            String name, String department, Integer grade, String password,
             String email, String code
     ) {
         // 이메일 인증(회원가입)
         emailVerificationService.verify(email, EmailPurpose.SIGNUP, code);
+
+        // email 앞부분(로컬파트)로 loginId/studentNo 생성
+        String derived = deriveIdFromEmail(email);
+        String loginId = derived;
+        String studentNo = derived;
 
         userRepository.findByLoginId(loginId).ifPresent(u -> {
             throw new ApiException(ErrorCode.CONFLICT, "LOGIN_ID_ALREADY_EXISTS");
@@ -58,6 +63,7 @@ public class AuthService {
         user.setStudentNo(studentNo);
         user.setName(name);
         user.setDepartment(department);
+        user.setGrade(grade); // ✅ User에 grade 필드/Setter 추가 필요
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setRole(Role.USER);
@@ -75,6 +81,7 @@ public class AuthService {
                 user.getStudentNo(),
                 user.getName(),
                 user.getDepartment(),
+                user.getGrade(),   // ✅ TokenResponse에 grade 필드 추가 필요
                 user.getEmail()
         );
         return new AuthResult(body, refreshToken);
@@ -99,6 +106,7 @@ public class AuthService {
                 user.getStudentNo(),
                 user.getName(),
                 user.getDepartment(),
+                user.getGrade(),
                 user.getEmail()
         );
         return new AuthResult(body, refreshToken);
@@ -125,6 +133,7 @@ public class AuthService {
                 user.getStudentNo(),
                 user.getName(),
                 user.getDepartment(),
+                user.getGrade(),
                 user.getEmail()
         );
         return new AuthResult(body, newRefresh);
@@ -149,5 +158,24 @@ public class AuthService {
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+    }
+
+    private String deriveIdFromEmail(String email) {
+        if (email == null) throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_EMAIL");
+        String e = email.trim().toLowerCase();
+
+        int at = e.indexOf('@');
+        if (at <= 0) throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_EMAIL");
+
+        String local = e.substring(0, at).trim();
+        if (local.isEmpty()) throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_EMAIL");
+
+        // 요구사항: @ 앞 숫자를 사용 → 숫자 아니면 거부
+        for (int i = 0; i < local.length(); i++) {
+            if (!Character.isDigit(local.charAt(i))) {
+                throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_EMAIL_LOCALPART");
+            }
+        }
+        return local;
     }
 }
