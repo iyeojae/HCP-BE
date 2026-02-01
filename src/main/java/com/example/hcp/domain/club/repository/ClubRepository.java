@@ -2,7 +2,6 @@
 package com.example.hcp.domain.club.repository;
 
 import com.example.hcp.domain.club.entity.Club;
-import com.example.hcp.domain.club.entity.ClubCategory;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -15,8 +14,7 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
         where c.isPublic = true
           and (:q is null or :q = '' or c.name like concat('%', :q, '%'))
           and (:status is null or :status = '' or c.recruitmentStatus = :status)
-          and (:category is null or c.category = :category)
         order by c.name asc
     """)
-    List<Club> searchPublic(String q, String status, ClubCategory category);
+    List<Club> searchPublic(String q, String status);
 }
