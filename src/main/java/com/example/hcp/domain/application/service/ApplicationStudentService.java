@@ -60,16 +60,23 @@ public class ApplicationStudentService {
         return formQueryService.questions(form.getId()); // orderNo ASC
     }
 
+    // ✅ List<JsonNode> -> List<Object>
     @Transactional
-    public Long submit(Long userId, Long clubId, List<JsonNode> answers) {
+    public Long submit(Long userId, Long clubId, List<Object> answers) {
         if (answers == null || answers.isEmpty()) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWERS");
         }
-        for (JsonNode a : answers) {
+
+        // ✅ Object -> JsonNode (배열/객체/문자열 그대로)
+        List<JsonNode> answerNodes = answers.stream()
+                .map(a -> a == null ? null : objectMapper.<JsonNode>valueToTree(a))
+                .toList();
+
+        // 기본 유효성 (null / 텍스트 공백)
+        for (JsonNode a : answerNodes) {
             if (a == null || a.isNull()) {
                 throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWER");
             }
-            // 텍스트 답변만 공백 방지(배열/객체는 템플릿별 검증에서 체크)
             if (a.isTextual() && a.asText().isBlank()) {
                 throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWER");
             }
@@ -92,13 +99,13 @@ public class ApplicationStudentService {
         ApplicationForm form = formQueryService.getFormByClubId(clubId);
         List<FormQuestion> questions = formQueryService.questions(form.getId());
 
-        if (questions.size() != answers.size()) {
+        if (questions.size() != answerNodes.size()) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "ANSWER_COUNT_MISMATCH");
         }
 
         // 템플릿별 검증
         for (int i = 0; i < questions.size(); i++) {
-            validateAnswerByTemplate(questions.get(i), answers.get(i));
+            validateAnswerByTemplate(questions.get(i), answerNodes.get(i));
         }
 
         Application application = new Application();
@@ -113,7 +120,7 @@ public class ApplicationStudentService {
             ApplicationAnswer ans = new ApplicationAnswer();
             ans.setApplication(application);
             ans.setQuestion(questions.get(i));
-            ans.setValueText(toValueText(answers.get(i)));
+            ans.setValueText(toValueText(answerNodes.get(i)));
             answerRepository.save(ans);
         }
 
@@ -174,7 +181,7 @@ public class ApplicationStudentService {
                 if (chosen.isEmpty()) throw new ApiException(ErrorCode.BAD_REQUEST, "T3_EMPTY_SELECTION");
             }
 
-            case 4 -> { // {"q1":["단어A"],"q2":["단어B"]} (문자열 1개도 허용)
+            case 4 -> { // {"q1":[...],"q2":[...]} (문자열 1개도 허용)
                 if (ansNode == null || !ansNode.isObject()) {
                     throw new ApiException(ErrorCode.BAD_REQUEST, "T4_Q1_Q2_REQUIRED");
                 }
