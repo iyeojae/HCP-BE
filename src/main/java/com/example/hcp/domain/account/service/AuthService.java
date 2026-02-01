@@ -9,6 +9,7 @@ import com.example.hcp.global.exception.ApiException;
 import com.example.hcp.global.exception.ErrorCode;
 import com.example.hcp.global.security.JwtTokenProvider;
 import com.example.hcp.global.security.Role;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -17,10 +18,16 @@ public class AuthService {
 
     public record AuthResult(TokenResponse response, String refreshToken) {}
 
+    // ✅ 추가 (중복확인 결과 반환용)
+    public record CheckLoginIdResult(String loginId, boolean available) {}
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final EmailVerificationService emailVerificationService;
+
+    @Value("${app.school-email-domain:@office.hanseo.ac.kr}")
+    private String schoolEmailDomain;
 
     public AuthService(
             UserRepository userRepository,
@@ -34,19 +41,32 @@ public class AuthService {
         this.emailVerificationService = emailVerificationService;
     }
 
+    // ✅ 추가: loginId(학번) 중복확인
+    public CheckLoginIdResult checkLoginId(String loginId) {
+        String normalized = normalizeLoginId(loginId);
+
+        boolean exists =
+                userRepository.existsByLoginId(normalized) ||
+                        userRepository.existsByStudentNo(normalized); // loginId==studentNo 정책 안전장치
+
+        return new CheckLoginIdResult(normalized, !exists);
+    }
+
+    // ✅ signup: email 대신 loginId(학번)로 받고, email/loginId/studentNo를 모두 동일 값으로 생성
     public AuthResult signup(
-            String name, String department, Integer grade, String password,
-            String email, String code
+            String loginId, String name, String department, Integer grade, String password,
+            String code
     ) {
-        // 이메일 인증(회원가입)
+        String normalizedLoginId = normalizeLoginId(loginId);
+        String email = buildSchoolEmail(normalizedLoginId);
+
+        // 이메일 인증(회원가입) - 이메일은 내부에서 생성한 값으로 검증
         emailVerificationService.verify(email, EmailPurpose.SIGNUP, code);
 
-        // email 앞부분(로컬파트)로 loginId/studentNo 생성
-        String derived = deriveIdFromEmail(email);
-        String loginId = derived;
-        String studentNo = derived;
+        // loginId == studentNo == 이메일 로컬파트
+        String studentNo = normalizedLoginId;
 
-        userRepository.findByLoginId(loginId).ifPresent(u -> {
+        userRepository.findByLoginId(normalizedLoginId).ifPresent(u -> {
             throw new ApiException(ErrorCode.CONFLICT, "LOGIN_ID_ALREADY_EXISTS");
         });
 
@@ -59,11 +79,11 @@ public class AuthService {
         });
 
         User user = new User();
-        user.setLoginId(loginId);
+        user.setLoginId(normalizedLoginId);
         user.setStudentNo(studentNo);
         user.setName(name);
         user.setDepartment(department);
-        user.setGrade(grade); // ✅ User에 grade 필드/Setter 추가 필요
+        user.setGrade(grade);
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setRole(Role.USER);
@@ -81,7 +101,7 @@ public class AuthService {
                 user.getStudentNo(),
                 user.getName(),
                 user.getDepartment(),
-                user.getGrade(),   // ✅ TokenResponse에 grade 필드 추가 필요
+                user.getGrade(),
                 user.getEmail()
         );
         return new AuthResult(body, refreshToken);
@@ -139,7 +159,7 @@ public class AuthService {
         return new AuthResult(body, newRefresh);
     }
 
-    // 아이디 찾기 (이메일 + 코드)
+    // 아이디 찾기 (이메일 + 코드) - 기존 유지
     public String findLoginIdByEmail(String email, String code) {
         emailVerificationService.verify(email, EmailPurpose.FIND_ID, code);
 
@@ -149,7 +169,7 @@ public class AuthService {
         return user.getLoginId();
     }
 
-    // 비밀번호 재설정 (이메일 + 코드)
+    // 비밀번호 재설정 (이메일 + 코드) - 기존 유지
     public void resetPasswordByEmail(String email, String code, String newPassword) {
         emailVerificationService.verify(email, EmailPurpose.RESET_PASSWORD, code);
 
@@ -160,22 +180,25 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    private String deriveIdFromEmail(String email) {
-        if (email == null) throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_EMAIL");
-        String e = email.trim().toLowerCase();
+    private String normalizeLoginId(String loginId) {
+        if (loginId == null) throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_LOGIN_ID");
+        String v = loginId.trim();
+        if (v.isEmpty()) throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_LOGIN_ID");
 
-        int at = e.indexOf('@');
-        if (at <= 0) throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_EMAIL");
-
-        String local = e.substring(0, at).trim();
-        if (local.isEmpty()) throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_EMAIL");
-
-        // 요구사항: @ 앞 숫자를 사용 → 숫자 아니면 거부
-        for (int i = 0; i < local.length(); i++) {
-            if (!Character.isDigit(local.charAt(i))) {
-                throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_EMAIL_LOCALPART");
+        // 요구사항: 학번 숫자만 허용
+        for (int i = 0; i < v.length(); i++) {
+            if (!Character.isDigit(v.charAt(i))) {
+                throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_LOGIN_ID");
             }
         }
-        return local;
+        return v;
+    }
+
+    private String buildSchoolEmail(String loginId) {
+        String suffix = (schoolEmailDomain != null && schoolEmailDomain.startsWith("@"))
+                ? schoolEmailDomain.trim()
+                : ("@" + String.valueOf(schoolEmailDomain).trim());
+
+        return loginId + suffix.toLowerCase();
     }
 }

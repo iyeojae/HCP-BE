@@ -34,11 +34,24 @@ public class AuthController {
         this.authService = authService;
     }
 
+    // ✅ 추가: loginId(학번) 중복확인
+    public record CheckLoginIdResponse(String loginId, boolean available) {}
+
+    @GetMapping("/check-loginid")
+    public CheckLoginIdResponse checkLoginId(@RequestParam String loginId) {
+        AuthService.CheckLoginIdResult r = authService.checkLoginId(loginId);
+        return new CheckLoginIdResponse(r.loginId(), r.available());
+    }
+
     @PostMapping("/signup")
     public TokenResponse signup(@Valid @RequestBody SignupRequest req, HttpServletResponse res) {
         AuthService.AuthResult r = authService.signup(
-                req.name(), req.department(), req.grade(), req.password(),
-                req.email(), req.code()
+                req.loginId(),
+                req.name(),
+                req.department(),
+                req.grade(),
+                req.password(),
+                req.code()
         );
         setRefreshCookie(res, r.refreshToken());
         return r.response();
