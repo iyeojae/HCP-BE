@@ -47,7 +47,6 @@ public class ContentCommandService {
         return postRepository.save(post);
     }
 
-    // ✅ 추가: 홍보글 수정
     @Transactional
     public void updatePost(Long clubId, Long postId, String title, String content) {
         ClubPost post = postRepository.findById(postId)
@@ -63,6 +62,10 @@ public class ContentCommandService {
 
     @Transactional
     public MediaFile uploadMedia(Long clubId, Long postIdOrNull, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_FILE");
+        }
+
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "CLUB_NOT_FOUND"));
 
@@ -70,18 +73,37 @@ public class ContentCommandService {
         if (postIdOrNull != null) {
             post = postRepository.findById(postIdOrNull)
                     .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "POST_NOT_FOUND"));
+
+            if (!post.getClub().getId().equals(clubId)) {
+                throw new ApiException(ErrorCode.FORBIDDEN, "CLUB_ACCESS_DENIED");
+            }
         }
 
         FileStorageClient.StoredFile stored = fileStorageClient.store(file);
-        String type = (stored.mimeType() != null && stored.mimeType().startsWith("video")) ? "VIDEO" : "IMAGE";
+
+        String mime = (stored.mimeType() != null && !stored.mimeType().isBlank())
+                ? stored.mimeType()
+                : file.getContentType();
+
+        String type = (mime != null && mime.toLowerCase().startsWith("video/"))
+                ? "VIDEO"
+                : "IMAGE";
 
         MediaFile media = new MediaFile();
         media.setClub(club);
         media.setPost(post);
         media.setType(type);
         media.setUrl(stored.url());
-        media.setMimeType(stored.mimeType());
+        media.setMimeType(mime);
         media.setSizeBytes(stored.size());
+
+        // club-level(post=null) + IMAGE: 메인이 없으면 자동 메인 지정
+        if (post == null && "IMAGE".equalsIgnoreCase(type)) {
+            boolean hasMain = mediaFileRepository.existsByClub_IdAndPostIsNullAndIsMainTrue(clubId);
+            media.setMain(!hasMain);
+        } else {
+            media.setMain(false);
+        }
 
         return mediaFileRepository.save(media);
     }

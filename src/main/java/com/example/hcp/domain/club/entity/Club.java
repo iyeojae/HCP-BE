@@ -15,49 +15,34 @@ public class Club {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Setter
-    @Getter
+    @Setter @Getter
     @Column(name = "name", nullable = false, length = 80)
     private String name;
 
-    @Setter
-    @Getter
-    @Column(name = "introduction", columnDefinition = "TEXT")
-    private String introduction;
+    @Setter @Getter
+    @Column(name = "summary", nullable = false, length = 200)
+    private String summary;
 
-    @Setter
-    @Getter
-    @Column(name = "activities", columnDefinition = "TEXT")
-    private String activities;
+    @Setter @Getter
+    @Column(name = "recruit_start_at", nullable = false)
+    private LocalDateTime recruitStartAt;
 
-    @Setter
-    @Getter
-    @Column(name = "recruit_target", columnDefinition = "TEXT")
-    private String recruitTarget;
+    @Setter @Getter
+    @Column(name = "recruit_end_at", nullable = false)
+    private LocalDateTime recruitEndAt;
 
-    @Setter
-    @Getter
-    @Column(name = "interview_process", columnDefinition = "TEXT")
-    private String interviewProcess;
-
-    @Setter
-    @Getter
-    @Column(name = "contact_link", length = 500)
-    private String contactLink;
-
-    @Setter
-    @Getter
+    @Setter @Getter
     @Enumerated(EnumType.STRING)
     @Column(name = "category", length = 50)
     private ClubCategory category;
 
-    @Setter
-    @Getter
-    @Column(name = "recruitment_status", length = 20)
-    private String recruitmentStatus; // OPEN/CLOSED/PRE 등
+    @Setter @Getter
+    @Column(name = "introduction", columnDefinition = "TEXT")
+    private String introduction;
 
-    @Column(name = "is_public", nullable = false)
-    private boolean isPublic = true;
+    @Setter @Getter
+    @Column(name = "interview_process", columnDefinition = "TEXT")
+    private String interviewProcess;
 
     @Getter
     @Column(name = "view_count", nullable = false)
@@ -82,11 +67,15 @@ public class Club {
         updatedAt = LocalDateTime.now();
     }
 
-    public boolean isPublic() { return isPublic; }
-
-    public void setPublic(boolean aPublic) { isPublic = aPublic; }
-
     public void increaseViewCount() {
         this.viewCount++;
+    }
+
+    public String recruitState(LocalDateTime now) {
+        if (now == null) now = LocalDateTime.now();
+        if (recruitStartAt == null || recruitEndAt == null) return "UNKNOWN";
+        if (now.isBefore(recruitStartAt)) return "PRE";
+        if (now.isAfter(recruitEndAt)) return "CLOSED";
+        return "OPEN";
     }
 }

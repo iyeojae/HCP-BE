@@ -12,6 +12,7 @@ import com.example.hcp.domain.application.service.ApplicationAdminService;
 import com.example.hcp.domain.club.entity.Club;
 import com.example.hcp.domain.club.service.ClubCommandService;
 import com.example.hcp.domain.content.entity.MediaFile;
+import com.example.hcp.domain.content.repository.MediaFileRepository;
 import com.example.hcp.domain.content.service.ContentCommandService;
 import com.example.hcp.domain.form.entity.FormQuestion;
 import com.example.hcp.domain.form.service.FormCommandService;
@@ -24,11 +25,15 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -40,6 +45,7 @@ public class ClubAdminController {
     private final ClubAccessService clubAccessService;
     private final ClubCommandService clubCommandService;
     private final ContentCommandService contentCommandService;
+    private final MediaFileRepository mediaFileRepository;
     private final FormCommandService formCommandService;
     private final ApplicationAdminService applicationAdminService;
     private final ClubDashboardService clubDashboardService;
@@ -49,6 +55,7 @@ public class ClubAdminController {
             ClubAccessService clubAccessService,
             ClubCommandService clubCommandService,
             ContentCommandService contentCommandService,
+            MediaFileRepository mediaFileRepository,
             FormCommandService formCommandService,
             ApplicationAdminService applicationAdminService,
             ClubDashboardService clubDashboardService,
@@ -57,6 +64,7 @@ public class ClubAdminController {
         this.clubAccessService = clubAccessService;
         this.clubCommandService = clubCommandService;
         this.contentCommandService = contentCommandService;
+        this.mediaFileRepository = mediaFileRepository;
         this.formCommandService = formCommandService;
         this.applicationAdminService = applicationAdminService;
         this.clubDashboardService = clubDashboardService;
@@ -68,42 +76,101 @@ public class ClubAdminController {
         return new MyClubsResponse(clubAccessService.myClubIds(me.userId()));
     }
 
-    @PutMapping("/clubs/{clubId}")
+    // ✅ 동아리 수정(동아리 필드 + 메인사진(옵션) + 사진/영상 여러개(옵션))
+    // - mainImage가 오면: 기존 club-level 미디어(post=null) 전체 교체 (새 main = isMain=true)
+    // - mainImage 없이 mediaFiles만 오면: 기존 main(isMain=true) 유지, 나머지 club-level 미디어만 교체
+    @PutMapping(value = "/clubs/{clubId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public void updateClub(
             @AuthenticationPrincipal SecurityUser me,
             @PathVariable Long clubId,
-            @Valid @RequestBody ClubUpsertRequest req
+            @Valid @RequestPart("data") ClubUpsertRequest req,
+            @RequestPart(value = "mainImage", required = false) MultipartFile mainImage,
+            @RequestPart(value = "mediaFiles", required = false) List<MultipartFile> mediaFiles
     ) {
-        if (!me.role().name().equals("ADMIN")) {
-            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
-        }
+        assertClubAdminOrAdmin(me, clubId);
+        validateRecruitPeriod(req.recruitStartAt(), req.recruitEndAt());
 
         Club changes = new Club();
         changes.setName(req.name());
-        changes.setIntroduction(req.introduction());
-        changes.setActivities(req.activities());
-        changes.setRecruitTarget(req.recruitTarget());
-        changes.setInterviewProcess(req.interviewProcess());
-        changes.setContactLink(req.contactLink());
+        changes.setSummary(req.summary());
+        changes.setRecruitStartAt(req.recruitStartAt());
+        changes.setRecruitEndAt(req.recruitEndAt());
         changes.setCategory(req.category());
-        changes.setRecruitmentStatus(req.recruitmentStatus());
-        changes.setPublic(req.isPublic());
+        changes.setIntroduction(req.introduction());
+        changes.setInterviewProcess(req.interviewProcess());
 
         clubCommandService.update(clubId, changes);
+
+        boolean hasMain = (mainImage != null && !mainImage.isEmpty());
+        boolean hasMedia = hasAnyFile(mediaFiles);
+        if (!hasMain && !hasMedia) return;
+
+        if (hasMain) {
+            requireImage(mainImage, "MAIN_IMAGE_MUST_BE_IMAGE");
+
+            // 전체 교체
+            List<MediaFile> oldAll = mediaFileRepository.findByClub_IdAndPostIsNullOrderByIdAsc(clubId);
+            if (!oldAll.isEmpty()) mediaFileRepository.deleteAll(oldAll);
+
+            // uploadMedia 내부에서: club-level IMAGE 첫 업로드면 isMain=true
+            contentCommandService.uploadMedia(clubId, null, mainImage);
+            uploadAllClubMedia(clubId, mediaFiles);
+            return;
+        }
+
+        // mainImage 없이 mediaFiles만 온 경우: 기존 main(isMain=true) 유지
+        MediaFile oldMain = mediaFileRepository
+                .findTop1ByClub_IdAndPostIsNullAndIsMainTrueAndTypeIgnoreCaseOrderByIdAsc(clubId, "IMAGE")
+                .orElseThrow(() -> new ApiException(ErrorCode.BAD_REQUEST, "MAIN_IMAGE_REQUIRED"));
+
+        List<MediaFile> oldAll = mediaFileRepository.findByClub_IdAndPostIsNullOrderByIdAsc(clubId);
+
+        List<MediaFile> toDelete = new ArrayList<>();
+        for (MediaFile m : oldAll) {
+            if (!m.getId().equals(oldMain.getId())) {
+                toDelete.add(m);
+            }
+        }
+        if (!toDelete.isEmpty()) mediaFileRepository.deleteAll(toDelete);
+
+        uploadAllClubMedia(clubId, mediaFiles);
     }
 
-    @PostMapping("/clubs/{clubId}/media")
-    public UploadMediaResponse uploadMedia(
-            @AuthenticationPrincipal SecurityUser me,
-            @PathVariable Long clubId,
-            @RequestParam(required = false) Long postId,
-            @RequestPart MultipartFile file
-    ) {
+    private void uploadAllClubMedia(Long clubId, List<MultipartFile> mediaFiles) {
+        if (mediaFiles == null) return;
+        for (MultipartFile f : mediaFiles) {
+            if (f != null && !f.isEmpty()) {
+                contentCommandService.uploadMedia(clubId, null, f);
+            }
+        }
+    }
+
+    private void assertClubAdminOrAdmin(SecurityUser me, Long clubId) {
         if (!me.role().name().equals("ADMIN")) {
             clubAccessService.assertClubAdminAccess(me.userId(), clubId);
         }
-        MediaFile media = contentCommandService.uploadMedia(clubId, postId, file);
-        return new UploadMediaResponse(media.getId());
+    }
+
+    private boolean hasAnyFile(List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) return false;
+        for (MultipartFile f : files) {
+            if (f != null && !f.isEmpty()) return true;
+        }
+        return false;
+    }
+
+    private void validateRecruitPeriod(LocalDateTime start, LocalDateTime end) {
+        if (start == null || end == null) return;
+        if (!end.isAfter(start)) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "RECRUIT_END_MUST_BE_AFTER_START");
+        }
+    }
+
+    private void requireImage(MultipartFile file, String code) {
+        String ct = file.getContentType();
+        if (!StringUtils.hasText(ct) || !ct.toLowerCase().startsWith("image/")) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, code);
+        }
     }
 
     @PutMapping("/clubs/{clubId}/form")
@@ -112,9 +179,7 @@ public class ClubAdminController {
             @PathVariable Long clubId,
             @Valid @RequestBody FormUpsertRequest req
     ) {
-        if (!me.role().name().equals("ADMIN")) {
-            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
-        }
+        assertClubAdminOrAdmin(me, clubId);
 
         Long formId = formCommandService.upsertForm(clubId, req).getId();
         return new UpsertFormResponse(formId);
@@ -125,9 +190,7 @@ public class ClubAdminController {
             @AuthenticationPrincipal SecurityUser me,
             @PathVariable Long clubId
     ) {
-        if (!me.role().name().equals("ADMIN")) {
-            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
-        }
+        assertClubAdminOrAdmin(me, clubId);
 
         List<Application> apps = applicationAdminService.listByClub(clubId);
 
@@ -148,9 +211,7 @@ public class ClubAdminController {
             @PathVariable Long clubId,
             @PathVariable Long applicationId
     ) {
-        if (!me.role().name().equals("ADMIN")) {
-            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
-        }
+        assertClubAdminOrAdmin(me, clubId);
 
         Application app = applicationAdminService.get(applicationId);
         if (!app.getClub().getId().equals(clubId)) {
@@ -158,10 +219,7 @@ public class ClubAdminController {
         }
 
         List<ApplicationAnswer> answers = applicationAdminService.answers(applicationId);
-
-        // ✅ 질문(템플릿 필드 펼친 형태) + 지원자 답변(value) 같이 내려줌
-        List<ApplicationDetailResponse.Answer> answerDtos =
-                answers.stream().map(this::toAnswerDto).toList();
+        List<ApplicationDetailResponse.Answer> answerDtos = answers.stream().map(this::toAnswerDto).toList();
 
         return new ApplicationDetailResponse(
                 app.getId(),
@@ -205,7 +263,7 @@ public class ClubAdminController {
         return new ApplicationDetailResponse.Answer(
                 q.getOrderNo(),
                 q.getTemplateNo(),
-                q.getLabel(), // title
+                q.getLabel(),
                 words,
                 questions,
                 sentences,
@@ -231,9 +289,8 @@ public class ClubAdminController {
 
         try {
             JsonNode node = objectMapper.readTree(s);
-            return objectMapper.convertValue(node, Object.class); // Map/List/String/Number/Boolean 등
+            return objectMapper.convertValue(node, Object.class);
         } catch (JsonProcessingException e) {
-            // JSON이 아니면 문자열 그대로(텍스트 답변 호환)
             return raw;
         }
     }
@@ -245,9 +302,7 @@ public class ClubAdminController {
             @PathVariable Long applicationId,
             @Valid @RequestBody ChangeStatusRequest req
     ) {
-        if (!me.role().name().equals("ADMIN")) {
-            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
-        }
+        assertClubAdminOrAdmin(me, clubId);
 
         Application app = applicationAdminService.get(applicationId);
         if (!app.getClub().getId().equals(clubId)) {
@@ -262,9 +317,7 @@ public class ClubAdminController {
             @AuthenticationPrincipal SecurityUser me,
             @PathVariable Long clubId
     ) {
-        if (!me.role().name().equals("ADMIN")) {
-            clubAccessService.assertClubAdminAccess(me.userId(), clubId);
-        }
+        assertClubAdminOrAdmin(me, clubId);
 
         ClubDashboardService.DashboardResult r = clubDashboardService.dashboard(clubId);
         return new DashboardResponse(

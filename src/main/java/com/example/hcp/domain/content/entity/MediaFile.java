@@ -1,3 +1,4 @@
+// src/main/java/com/example/hcp/domain/content/entity/MediaFile.java
 package com.example.hcp.domain.content.entity;
 
 import com.example.hcp.domain.club.entity.Club;
@@ -15,35 +16,34 @@ public class MediaFile {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Setter
-    @Getter
+    @Setter @Getter
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "club_id", nullable = false)
     private Club club;
 
-    @Setter
-    @Getter
+    @Setter @Getter
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "post_id")
     private ClubPost post;
 
-    @Setter
-    @Getter
+    @Setter @Getter
     @Column(name = "type", nullable = false, length = 10)
     private String type; // IMAGE/VIDEO
 
-    @Setter
-    @Getter
+    @Setter @Getter
     @Column(name = "url", nullable = false, length = 1000)
     private String url;
 
-    @Setter
-    @Getter
+    @Setter @Getter
     @Column(name = "mime_type", length = 100)
     private String mimeType;
 
-    @Setter
-    @Getter
+    @Setter @Getter
     @Column(name = "size_bytes")
     private long sizeBytes;
+
+    // ✅ club-level(post=null) 메인사진 여부
+    @Setter @Getter
+    @Column(name = "is_main", nullable = false)
+    private boolean isMain = false;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -54,5 +54,4 @@ public class MediaFile {
     void prePersist() {
         createdAt = LocalDateTime.now();
     }
-
 }

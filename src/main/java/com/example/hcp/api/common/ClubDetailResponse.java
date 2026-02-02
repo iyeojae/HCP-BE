@@ -3,24 +3,33 @@ package com.example.hcp.api.common;
 
 import com.example.hcp.domain.club.entity.ClubCategory;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public record ClubDetailResponse(
         Long clubId,
+
+        String mainImageUrl,
         String name,
-        String introduction,
-        String activities,
-        String recruitTarget,
-        String interviewProcess,
-        String contactLink,
+        String summary,
+
+        LocalDateTime recruitStartAt,
+        LocalDateTime recruitEndAt,
+
+        String recruitState,
+        Long secondsToStart,
+        Long secondsToEnd,
+
+        long applicationCount,
+
         ClubCategory category,
-        String recruitmentStatus,
+        String introduction,
+        String interviewProcess,
+
         long viewCount,
+
+        // club-level 미디어(post=null)
         List<Media> media
 ) {
-    public record Media(
-            Long mediaId,
-            String type,
-            String url
-    ) {}
+    public record Media(Long mediaId, String type, String url) {}
 }

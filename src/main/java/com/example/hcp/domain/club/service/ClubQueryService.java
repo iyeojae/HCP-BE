@@ -8,6 +8,8 @@ import com.example.hcp.global.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Service
@@ -19,9 +21,9 @@ public class ClubQueryService {
         this.clubRepository = clubRepository;
     }
 
-    // q(이름) + status(모집전/모집중/모집완료) 교집합 검색
     public List<Club> searchPublic(String q, String status) {
-        return clubRepository.searchPublic(q, normalizeStatus(status));
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Seoul"));
+        return clubRepository.searchPublic(q, normalizeStatus(status), now);
     }
 
     private String normalizeStatus(String status) {
@@ -29,12 +31,11 @@ public class ClubQueryService {
         String s = status.trim();
         if (s.isEmpty()) return null;
 
-        // 한글/코드 둘 다 허용
         return switch (s) {
             case "모집전" -> "PRE";
             case "모집중" -> "OPEN";
             case "모집완료" -> "CLOSED";
-            default -> s; // PRE/OPEN/CLOSED 등
+            default -> s;
         };
     }
 
@@ -42,10 +43,6 @@ public class ClubQueryService {
     public Club getPublicDetailAndIncreaseView(Long clubId) {
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "CLUB_NOT_FOUND"));
-
-        if (!club.isPublic()) {
-            throw new ApiException(ErrorCode.NOT_FOUND, "CLUB_NOT_FOUND");
-        }
 
         club.increaseViewCount();
         return club;

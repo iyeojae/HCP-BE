@@ -1,3 +1,4 @@
+// src/main/java/com/example/hcp/domain/content/repository/ClubPostRepository.java
 package com.example.hcp.domain.content.repository;
 
 import com.example.hcp.domain.content.entity.ClubPost;

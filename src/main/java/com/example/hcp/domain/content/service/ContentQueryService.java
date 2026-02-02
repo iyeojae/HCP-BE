@@ -7,9 +7,7 @@ import com.example.hcp.domain.content.repository.ClubPostRepository;
 import com.example.hcp.domain.content.repository.MediaFileRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class ContentQueryService {
@@ -30,22 +28,57 @@ public class ContentQueryService {
         return mediaFileRepository.findByClub_IdAndPost_IdOrderByIdAsc(clubId, postId);
     }
 
+    // ✅ [추가] 여러 post 미디어 일괄 조회 (N+1 제거)
+    public Map<Long, List<MediaFile>> mediaByPosts(Long clubId, List<Long> postIds) {
+        if (postIds == null || postIds.isEmpty()) return Map.of(); // ✅ 빈 IN 방지
+
+        List<MediaFile> list = mediaFileRepository.findByClubIdAndPostIdsOrderByPostAndId(clubId, postIds);
+
+        Map<Long, List<MediaFile>> map = new HashMap<>();
+        for (MediaFile m : list) {
+            Long postId = (m.getPost() != null) ? m.getPost().getId() : null;
+            if (postId == null) continue;
+            map.computeIfAbsent(postId, k -> new ArrayList<>()).add(m);
+        }
+        return map;
+    }
+
     public List<MediaFile> mediaByClub(Long clubId) {
         return mediaFileRepository.findByClub_IdAndPostIsNullOrderByIdAsc(clubId);
     }
 
-    // clubIds에 대해 대표사진 URL(첫 IMAGE) 맵으로 반환
+    public String clubMainImageUrl(Long clubId) {
+        return mediaFileRepository
+                .findTop1ByClub_IdAndPostIsNullAndIsMainTrueAndTypeIgnoreCaseOrderByIdAsc(clubId, "IMAGE")
+                .map(MediaFile::getUrl)
+                .orElseGet(() ->
+                        mediaByClub(clubId).stream()
+                                .filter(m -> "IMAGE".equalsIgnoreCase(m.getType()))
+                                .map(MediaFile::getUrl)
+                                .findFirst()
+                                .orElse(null)
+                );
+    }
+
     public Map<Long, String> clubCoverImageUrlMap(List<Long> clubIds) {
         if (clubIds == null || clubIds.isEmpty()) return Map.of();
 
-        List<MediaFile> images = mediaFileRepository
-                .findByClubIdsAndPostIsNullAndTypeOrderByClubAndId(clubIds, "IMAGE");
-
         Map<Long, String> map = new HashMap<>();
-        for (MediaFile m : images) {
-            Long clubId = m.getClub().getId();
-            map.putIfAbsent(clubId, m.getUrl()); // 첫 이미지가 대표
+
+        List<MediaFile> mains = mediaFileRepository
+                .findMainByClubIdsAndPostIsNullAndTypeOrderByClubAndId(clubIds, "IMAGE");
+        for (MediaFile m : mains) {
+            map.putIfAbsent(m.getClub().getId(), m.getUrl());
         }
+
+        if (map.size() < clubIds.size()) {
+            List<MediaFile> images = mediaFileRepository
+                    .findByClubIdsAndPostIsNullAndTypeOrderByClubAndId(clubIds, "IMAGE");
+            for (MediaFile m : images) {
+                map.putIfAbsent(m.getClub().getId(), m.getUrl());
+            }
+        }
+
         return map;
     }
 }

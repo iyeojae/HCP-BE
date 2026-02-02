@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -60,19 +62,16 @@ public class ApplicationStudentService {
         return formQueryService.questions(form.getId()); // orderNo ASC
     }
 
-    // ✅ List<JsonNode> -> List<Object>
     @Transactional
     public Long submit(Long userId, Long clubId, List<Object> answers) {
         if (answers == null || answers.isEmpty()) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWERS");
         }
 
-        // ✅ Object -> JsonNode (배열/객체/문자열 그대로)
         List<JsonNode> answerNodes = answers.stream()
                 .map(a -> a == null ? null : objectMapper.<JsonNode>valueToTree(a))
                 .toList();
 
-        // 기본 유효성 (null / 텍스트 공백)
         for (JsonNode a : answerNodes) {
             if (a == null || a.isNull()) {
                 throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWER");
@@ -92,8 +91,19 @@ public class ApplicationStudentService {
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND, "CLUB_NOT_FOUND"));
 
-        if (!club.isPublic()) {
-            throw new ApiException(ErrorCode.NOT_FOUND, "CLUB_NOT_FOUND");
+        // ✅ 모집중일 때만 지원 가능: start <= now < end (KST)
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Seoul"));
+        LocalDateTime start = club.getRecruitStartAt();
+        LocalDateTime end = club.getRecruitEndAt();
+
+        if (start == null || end == null) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "RECRUIT_SCHEDULE_REQUIRED");
+        }
+        if (!end.isAfter(start)) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "RECRUIT_SCHEDULE_INVALID");
+        }
+        if (now.isBefore(start) || !now.isBefore(end)) { // now < start OR now >= end
+            throw new ApiException(ErrorCode.BAD_REQUEST, "RECRUITMENT_NOT_OPEN");
         }
 
         ApplicationForm form = formQueryService.getFormByClubId(clubId);
@@ -103,7 +113,6 @@ public class ApplicationStudentService {
             throw new ApiException(ErrorCode.BAD_REQUEST, "ANSWER_COUNT_MISMATCH");
         }
 
-        // 템플릿별 검증
         for (int i = 0; i < questions.size(); i++) {
             validateAnswerByTemplate(questions.get(i), answerNodes.get(i));
         }
@@ -115,7 +124,6 @@ public class ApplicationStudentService {
         application.setStatus(ApplicationStatus.RECEIVED);
         application = applicationRepository.save(application);
 
-        // 저장: 텍스트면 그대로, 배열/객체면 JSON 문자열로
         for (int i = 0; i < questions.size(); i++) {
             ApplicationAnswer ans = new ApplicationAnswer();
             ans.setApplication(application);
@@ -133,7 +141,7 @@ public class ApplicationStudentService {
 
     private String toValueText(JsonNode node) {
         if (node == null || node.isNull()) return null;
-        if (node.isTextual()) return node.asText(); // template5 호환: "서술"
+        if (node.isTextual()) return node.asText();
         try {
             return objectMapper.writeValueAsString(node);
         } catch (JsonProcessingException e) {
@@ -141,10 +149,10 @@ public class ApplicationStudentService {
         }
     }
 
+    // 이하 validateAnswerByTemplate(...) 및 헬퍼 메서드들은 원본 그대로 유지
     private void validateAnswerByTemplate(FormQuestion q, JsonNode ansNode) {
         int t = q.getTemplateNo();
 
-        // (이전 폼 호환) templateNo=0: 문자열만
         if (t == 0) {
             if (ansNode == null || !ansNode.isTextual() || ansNode.asText().isBlank()) {
                 throw new ApiException(ErrorCode.BAD_REQUEST, "EMPTY_ANSWER");
@@ -153,16 +161,14 @@ public class ApplicationStudentService {
         }
 
         switch (t) {
-            case 1 -> { // ["단어1","단어2",...]
+            case 1 -> {
                 List<String> allowed = payloadStringArray(q.getPayloadJson(), "words", "T1_OPTIONS_REQUIRED");
                 List<String> chosen = requireStringArray(ansNode, "T1_ANSWER_MUST_BE_STRING_ARRAY");
                 requireSubsetNoDup(chosen, allowed, "T1_INVALID_SELECTION");
                 if (chosen.isEmpty()) throw new ApiException(ErrorCode.BAD_REQUEST, "T1_EMPTY_SELECTION");
             }
-
-            case 2 -> { // [0,2,1] (질문 개수만큼)
+            case 2 -> {
                 int questionCount = payloadStringArray(q.getPayloadJson(), "questions", "T2_QUESTIONS_REQUIRED").size();
-
                 List<Integer> chosen = requireIntArray(ansNode, "T2_ANSWER_MUST_BE_INT_ARRAY");
                 if (chosen.size() != questionCount) {
                     throw new ApiException(ErrorCode.BAD_REQUEST, "T2_ANSWER_COUNT_MISMATCH");
@@ -173,15 +179,13 @@ public class ApplicationStudentService {
                     }
                 }
             }
-
-            case 3 -> { // ["문장1","문장3"]
+            case 3 -> {
                 List<String> allowed = payloadStringArray(q.getPayloadJson(), "sentences", "T3_OPTIONS_REQUIRED");
                 List<String> chosen = requireStringArray(ansNode, "T3_ANSWER_MUST_BE_STRING_ARRAY");
                 requireSubsetNoDup(chosen, allowed, "T3_INVALID_SELECTION");
                 if (chosen.isEmpty()) throw new ApiException(ErrorCode.BAD_REQUEST, "T3_EMPTY_SELECTION");
             }
-
-            case 4 -> { // {"q1":[...],"q2":[...]} (문자열 1개도 허용)
+            case 4 -> {
                 if (ansNode == null || !ansNode.isObject()) {
                     throw new ApiException(ErrorCode.BAD_REQUEST, "T4_Q1_Q2_REQUIRED");
                 }
@@ -202,11 +206,7 @@ public class ApplicationStudentService {
                 if (chosenQ1.isEmpty()) throw new ApiException(ErrorCode.BAD_REQUEST, "T4_Q1_EMPTY_SELECTION");
                 if (chosenQ2.isEmpty()) throw new ApiException(ErrorCode.BAD_REQUEST, "T4_Q2_EMPTY_SELECTION");
             }
-
             case 5 -> {
-                // 허용:
-                // 1) "서술"(텍스트만 = q2만)
-                // 2) {"q2":"서술"} 또는 {"q1":{"number":2,"boolean":true},"q2":"서술"}
                 if (ansNode == null) throw new ApiException(ErrorCode.BAD_REQUEST, "T5_INVALID_FORMAT");
 
                 if (ansNode.isTextual()) {
@@ -251,14 +251,12 @@ public class ApplicationStudentService {
                     }
                 }
             }
-
-            case 6 -> { // ["단어1","단어2",...]
+            case 6 -> {
                 List<String> allowed = payloadStringArray(q.getPayloadJson(), "words", "T6_OPTIONS_REQUIRED");
                 List<String> chosen = requireStringArray(ansNode, "T6_ANSWER_MUST_BE_STRING_ARRAY");
                 requireSubsetNoDup(chosen, allowed, "T6_INVALID_SELECTION");
                 if (chosen.isEmpty()) throw new ApiException(ErrorCode.BAD_REQUEST, "T6_EMPTY_SELECTION");
             }
-
             default -> throw new ApiException(ErrorCode.BAD_REQUEST, "UNKNOWN_TEMPLATE_NO");
         }
     }
