@@ -104,12 +104,15 @@ public class ClubPublicController {
 
         long applicationCount = applicationRepository.countByClub_Id(clubId);
 
-        List<MediaFile> clubMedia = contentQueryService.mediaByClub(clubId);
-        List<ClubDetailResponse.Media> clubMediaDtos = clubMedia.stream()
+        // ✅ 대표사진 URL 먼저 계산
+        String mainImageUrl = contentQueryService.clubMainImageUrl(clubId);
+
+        // ✅ club-level 미디어에서 "대표사진" 제거하고 추가 미디어만 내려줌
+        List<MediaFile> clubMediaAll = contentQueryService.mediaByClub(clubId);
+        List<ClubDetailResponse.Media> extraMediaDtos = clubMediaAll.stream()
+                .filter(m -> !isMainImageMedia(m, mainImageUrl))
                 .map(m -> new ClubDetailResponse.Media(m.getId(), m.getType(), m.getUrl()))
                 .toList();
-
-        String mainImageUrl = contentQueryService.clubMainImageUrl(clubId);
 
         return new ClubDetailResponse(
                 club.getId(),
@@ -126,7 +129,18 @@ public class ClubPublicController {
                 club.getIntroduction(),
                 club.getInterviewProcess(),
                 club.getViewCount(),
-                clubMediaDtos
+                extraMediaDtos
         );
+    }
+
+    private boolean isMainImageMedia(MediaFile m, String mainImageUrl) {
+        if (m == null) return false;
+        if (!"IMAGE".equalsIgnoreCase(m.getType())) return false;
+
+        // 1) isMain=true 인 IMAGE는 대표사진으로 간주
+        if (m.isMain()) return true;
+
+        // 2) 과거 데이터 등으로 isMain이 없을 때도, 대표사진 URL과 동일한 IMAGE면 대표사진으로 간주
+        return mainImageUrl != null && mainImageUrl.equals(m.getUrl());
     }
 }

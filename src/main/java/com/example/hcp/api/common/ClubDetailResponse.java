@@ -28,7 +28,7 @@ public record ClubDetailResponse(
 
         long viewCount,
 
-        // club-level 미디어(post=null)
+        // ✅ 대표사진(mainImageUrl) 제외한 club-level 추가 미디어(post=null)
         List<Media> media
 ) {
     public record Media(Long mediaId, String type, String url) {}
