@@ -76,18 +76,24 @@ public class ClubAdminController {
         return new MyClubsResponse(clubAccessService.myClubIds(me.userId()));
     }
 
-    // ✅ 동아리 수정(동아리 필드 + 메인사진(옵션) + 사진/영상 여러개(옵션))
-    // - mainImage가 오면: 기존 club-level 미디어(post=null) 전체 교체 (새 main = isMain=true)
-    // - mainImage 없이 mediaFiles만 오면: 기존 main(isMain=true) 유지, 나머지 club-level 미디어만 교체
     @PutMapping(value = "/clubs/{clubId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public void updateClub(
             @AuthenticationPrincipal SecurityUser me,
             @PathVariable Long clubId,
-            @Valid @RequestPart("data") ClubUpsertRequest req,
+            @RequestPart("data") String dataJson,
             @RequestPart(value = "mainImage", required = false) MultipartFile mainImage,
             @RequestPart(value = "mediaFiles", required = false) List<MultipartFile> mediaFiles
     ) {
         assertClubAdminOrAdmin(me, clubId);
+
+        ClubUpsertRequest req = parseClubUpsertRequest(dataJson);
+
+        requireText(req.name(), "NAME_REQUIRED");
+        requireText(req.summary(), "SUMMARY_REQUIRED");
+        requireNotNull(req.recruitStartAt(), "RECRUIT_START_REQUIRED");
+        requireNotNull(req.recruitEndAt(), "RECRUIT_END_REQUIRED");
+        requireNotNull(req.category(), "CATEGORY_REQUIRED");
+
         validateRecruitPeriod(req.recruitStartAt(), req.recruitEndAt());
 
         Club changes = new Club();
@@ -108,9 +114,8 @@ public class ClubAdminController {
         if (hasMain) {
             requireImage(mainImage, "MAIN_IMAGE_MUST_BE_IMAGE");
 
-            // 전체 교체
-            List<MediaFile> oldAll = mediaFileRepository.findByClub_IdAndPostIsNullOrderByIdAsc(clubId);
-            if (!oldAll.isEmpty()) mediaFileRepository.deleteAll(oldAll);
+            // ✅ 전체 교체: club-level(post=null) 전부 삭제 (bulk)
+            mediaFileRepository.deleteByClub_IdAndPostIsNull(clubId);
 
             // uploadMedia 내부에서: club-level IMAGE 첫 업로드면 isMain=true
             contentCommandService.uploadMedia(clubId, null, mainImage);
@@ -136,10 +141,23 @@ public class ClubAdminController {
         uploadAllClubMedia(clubId, mediaFiles);
     }
 
+    private ClubUpsertRequest parseClubUpsertRequest(String dataJson) {
+        if (!StringUtils.hasText(dataJson)) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "DATA_REQUIRED");
+        }
+        try {
+            return objectMapper.readValue(dataJson, ClubUpsertRequest.class);
+        } catch (JsonProcessingException e) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_DATA_JSON");
+        }
+    }
+
     private void uploadAllClubMedia(Long clubId, List<MultipartFile> mediaFiles) {
         if (mediaFiles == null) return;
         for (MultipartFile f : mediaFiles) {
             if (f != null && !f.isEmpty()) {
+                // ✅ 추가: image/* 또는 video/*만 허용
+                requireImageOrVideo(f, "MEDIA_FILE_MUST_BE_IMAGE_OR_VIDEO");
                 contentCommandService.uploadMedia(clubId, null, f);
             }
         }
@@ -173,6 +191,31 @@ public class ClubAdminController {
         }
     }
 
+    // ✅ 추가: image/* 또는 video/*만 허용
+    private void requireImageOrVideo(MultipartFile file, String code) {
+        String ct = file.getContentType();
+        if (!StringUtils.hasText(ct)) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, code);
+        }
+        String lower = ct.toLowerCase();
+        if (!lower.startsWith("image/") && !lower.startsWith("video/")) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, code);
+        }
+    }
+
+    private void requireText(String s, String code) {
+        if (!StringUtils.hasText(s)) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, code);
+        }
+    }
+
+    private void requireNotNull(Object o, String code) {
+        if (o == null) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, code);
+        }
+    }
+
+    // 이하(폼/지원자/대시보드) 기존 코드 그대로
     @PutMapping("/clubs/{clubId}/form")
     public UpsertFormResponse upsertForm(
             @AuthenticationPrincipal SecurityUser me,

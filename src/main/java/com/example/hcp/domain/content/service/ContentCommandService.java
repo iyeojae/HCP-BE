@@ -81,13 +81,8 @@ public class ContentCommandService {
 
         FileStorageClient.StoredFile stored = fileStorageClient.store(file);
 
-        String mime = (stored.mimeType() != null && !stored.mimeType().isBlank())
-                ? stored.mimeType()
-                : file.getContentType();
-
-        String type = (mime != null && mime.toLowerCase().startsWith("video/"))
-                ? "VIDEO"
-                : "IMAGE";
+        String mime = resolveMime(stored, file);
+        String type = resolveTypeFromMime(mime); // ✅ image/video만 허용
 
         MediaFile media = new MediaFile();
         media.setClub(club);
@@ -106,5 +101,24 @@ public class ContentCommandService {
         }
 
         return mediaFileRepository.save(media);
+    }
+
+    private String resolveMime(FileStorageClient.StoredFile stored, MultipartFile file) {
+        String mime = (stored != null && stored.mimeType() != null && !stored.mimeType().isBlank())
+                ? stored.mimeType()
+                : file.getContentType();
+
+        if (mime == null || mime.isBlank()) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "MIME_TYPE_REQUIRED");
+        }
+        return mime.trim();
+    }
+
+    private String resolveTypeFromMime(String mime) {
+        String lower = mime.toLowerCase();
+        if (lower.startsWith("video/")) return "VIDEO";
+        if (lower.startsWith("image/")) return "IMAGE";
+        // ✅ 핵심 수정: 기타 파일 업로드 차단
+        throw new ApiException(ErrorCode.BAD_REQUEST, "MEDIA_FILE_MUST_BE_IMAGE_OR_VIDEO");
     }
 }

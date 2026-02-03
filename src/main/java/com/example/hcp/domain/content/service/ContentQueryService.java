@@ -28,9 +28,8 @@ public class ContentQueryService {
         return mediaFileRepository.findByClub_IdAndPost_IdOrderByIdAsc(clubId, postId);
     }
 
-    // ✅ [추가] 여러 post 미디어 일괄 조회 (N+1 제거)
     public Map<Long, List<MediaFile>> mediaByPosts(Long clubId, List<Long> postIds) {
-        if (postIds == null || postIds.isEmpty()) return Map.of(); // ✅ 빈 IN 방지
+        if (postIds == null || postIds.isEmpty()) return Map.of();
 
         List<MediaFile> list = mediaFileRepository.findByClubIdAndPostIdsOrderByPostAndId(clubId, postIds);
 

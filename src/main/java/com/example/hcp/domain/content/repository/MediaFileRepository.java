@@ -45,7 +45,6 @@ public interface MediaFileRepository extends JpaRepository<MediaFile, Long> {
             @Param("type") String type
     );
 
-    // ✅ [추가] 특정 club의 여러 post 미디어를 한 번에 조회 (N+1 제거)
     @Query("""
         select m from MediaFile m
         where m.club.id = :clubId

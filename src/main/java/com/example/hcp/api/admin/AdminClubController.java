@@ -6,13 +6,15 @@ import com.example.hcp.domain.club.service.ClubCommandService;
 import com.example.hcp.domain.content.service.ContentCommandService;
 import com.example.hcp.global.exception.ApiException;
 import com.example.hcp.global.exception.ErrorCode;
-import jakarta.validation.Valid;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -22,22 +24,33 @@ public class AdminClubController {
 
     private final ClubCommandService clubCommandService;
     private final ContentCommandService contentCommandService;
+    private final ObjectMapper objectMapper;
 
     public AdminClubController(
             ClubCommandService clubCommandService,
-            ContentCommandService contentCommandService
+            ContentCommandService contentCommandService,
+            ObjectMapper objectMapper
     ) {
         this.clubCommandService = clubCommandService;
         this.contentCommandService = contentCommandService;
+        this.objectMapper = objectMapper;
     }
 
     // ✅ 관리자: 동아리 생성(동아리 필드 + 메인사진(필수) + 사진/영상 여러개(옵션))
     @PostMapping(value = "/clubs", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AdminCreateClubResponse createClub(
-            @Valid @RequestPart("data") AdminCreateClubRequest req,
+            @RequestPart("data") String dataJson,
             @RequestPart("mainImage") MultipartFile mainImage,
             @RequestPart(value = "mediaFiles", required = false) List<MultipartFile> mediaFiles
     ) {
+        AdminCreateClubRequest req = parseAdminCreateClubRequest(dataJson);
+
+        requireText(req.name(), "NAME_REQUIRED");
+        requireText(req.summary(), "SUMMARY_REQUIRED");
+        requireNotNull(req.recruitStartAt(), "RECRUIT_START_REQUIRED");
+        requireNotNull(req.recruitEndAt(), "RECRUIT_END_REQUIRED");
+        requireNotNull(req.category(), "CATEGORY_REQUIRED");
+
         validateRecruitPeriod(req.recruitStartAt(), req.recruitEndAt());
         requireNonEmpty(mainImage, "MAIN_IMAGE_REQUIRED");
         requireImage(mainImage, "MAIN_IMAGE_MUST_BE_IMAGE");
@@ -56,10 +69,11 @@ public class AdminClubController {
         // 메인사진(대표사진) - cover는 "첫 IMAGE" 규칙이라 반드시 첫 업로드
         contentCommandService.uploadMedia(saved.getId(), null, mainImage);
 
-        // 관련 사진/영상 여러개(옵션)
+        // ✅ 관련 사진/영상 여러개(옵션): image/* 또는 video/*만 허용
         if (mediaFiles != null) {
             for (MultipartFile f : mediaFiles) {
                 if (f != null && !f.isEmpty()) {
+                    requireImageOrVideo(f, "MEDIA_FILE_MUST_BE_IMAGE_OR_VIDEO");
                     contentCommandService.uploadMedia(saved.getId(), null, f);
                 }
             }
@@ -68,7 +82,18 @@ public class AdminClubController {
         return new AdminCreateClubResponse(saved.getId());
     }
 
-    private void validateRecruitPeriod(java.time.LocalDateTime start, java.time.LocalDateTime end) {
+    private AdminCreateClubRequest parseAdminCreateClubRequest(String dataJson) {
+        if (!StringUtils.hasText(dataJson)) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "DATA_REQUIRED");
+        }
+        try {
+            return objectMapper.readValue(dataJson, AdminCreateClubRequest.class);
+        } catch (JsonProcessingException e) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "INVALID_DATA_JSON");
+        }
+    }
+
+    private void validateRecruitPeriod(LocalDateTime start, LocalDateTime end) {
         if (start == null || end == null) return;
         if (!end.isAfter(start)) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "RECRUIT_END_MUST_BE_AFTER_START");
@@ -84,6 +109,30 @@ public class AdminClubController {
     private void requireImage(MultipartFile file, String code) {
         String ct = file.getContentType();
         if (!StringUtils.hasText(ct) || !ct.toLowerCase().startsWith("image/")) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, code);
+        }
+    }
+
+    // ✅ 추가: image/* 또는 video/*만 허용
+    private void requireImageOrVideo(MultipartFile file, String code) {
+        String ct = file.getContentType();
+        if (!StringUtils.hasText(ct)) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, code);
+        }
+        String lower = ct.toLowerCase();
+        if (!lower.startsWith("image/") && !lower.startsWith("video/")) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, code);
+        }
+    }
+
+    private void requireText(String s, String code) {
+        if (!StringUtils.hasText(s)) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, code);
+        }
+    }
+
+    private void requireNotNull(Object o, String code) {
+        if (o == null) {
             throw new ApiException(ErrorCode.BAD_REQUEST, code);
         }
     }
